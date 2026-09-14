@@ -1,11 +1,13 @@
 from PyQt6.QtCore import QByteArray, QSettings, Qt, QTimer
 from PyQt6.QtGui import QCloseEvent, QKeySequence, QShortcut, QShowEvent
 from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QSplitter, QWidget
+from pathlib import Path
 
 from app import config, theme
 from app.threads import VoiceListener
 from app.widgets.canvas_panel import CanvasPanel
 from app.widgets.chat_panel import ChatPanel
+from app.widgets.top_left_video_widget import TopLeftVideoWidget
 from app.win_dark_mode import enable_dark_titlebar
 
 
@@ -33,6 +35,7 @@ class MainWindow(QMainWindow):
             on_thinking_ended=self._on_thinking_ended,
             on_speaking_started=self._on_speaking_started,
             on_speaking_ended=self._on_speaking_ended,
+            on_render_success=self._on_render_success,
             parent=self.splitter
         )
         self.splitter.addWidget(self.canvas_panel)
@@ -47,6 +50,15 @@ class MainWindow(QMainWindow):
         self._setup_shortcuts()
         self._restore_settings()
         self._setup_voice_listener()
+
+        self.video_preview = TopLeftVideoWidget(self, width=420, height=260)
+        self.video_preview.move(25, 25)
+        self.video_preview.hide()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.video_preview.move(25, 25)
+        self.video_preview.raise_()
 
     def _setup_shortcuts(self) -> None:
         QShortcut(QKeySequence(config.FULLSCREEN_SHORTCUT_F11), self, activated=self.toggle_fullscreen)
@@ -106,6 +118,9 @@ class MainWindow(QMainWindow):
     def _on_thinking_ended(self):
         # Change back the sphere to ohere colors, with breathing animation
         pass
+
+    def _on_render_success(self, output_mp4_path: str):
+        self.video_preview.play_video(output_mp4_path, title=Path(output_mp4_path).stem)
 
     def _on_speaking_started(self):
         # Change the sphere to speaking mode view

@@ -9,4 +9,5 @@ dependencies = [
     "manim>=0.21.0",
     "pygame>=2.6.1",
     "PyQt6",
+    "pyqt6-qt6>=6.11.2",
 ]

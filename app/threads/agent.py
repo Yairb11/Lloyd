@@ -2,6 +2,7 @@ import threading
 from PyQt6.QtCore import QThread, pyqtSignal
 import time
 
+from app.threads.manim_render_worker import ManimRenderWorker
 from app.config import *
 
 class Agent(QThread):
@@ -9,19 +10,50 @@ class Agent(QThread):
     thinking_ended = pyqtSignal()
     show_reply = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
+    render_succeeded = pyqtSignal(str)
 
 
     def __init__(self, message: str, parent=None) -> None:
         super().__init__(parent=parent)
         self.message = message
         self._paused = threading.Event()
+        self.manim_worker = None
 
     def run(self) -> None:
         self.thinking_started.emit()
-        time.sleep(1)
-        output_messgae = "For a classic Daiquiri, measure 60ml of white rum, 30ml fresh lime juice, and 1/2 oz of 2:1 rich simple syrup."
+
+        #===========================================================================================================================================================
+        # TESTING THE AGENT AND THE MANIM VIEW
+        if self.message.startswith("json"):
+            path = self.message[4:]
+            with open(path, "r", encoding="utf-8") as file:
+                raw_agent_output = file.read()
+            self.generate_and_show_from_string(raw_agent_output)
+        else:
+            time.sleep(1)
+            output_messgae = "For a classic Daiquiri, measure 60ml of white rum, 30ml fresh lime juice, and 1/2 oz of 2:1 rich simple syrup."
+            self.thinking_ended.emit()
+            self.show_reply.emit(output_messgae)
+        #===========================================================================================================================================================
+
+    def generate_and_show_from_string(self, recipe_json_string: str):
+        self.manim_worker = ManimRenderWorker(recipe_json_string, self)
+        self.manim_worker.rendering_finished.connect(self._on_render_success)
+        self.manim_worker.rendering_failed.connect(self._on_render_failure)
+
+        self.manim_worker.start()
+
+    def _on_render_success(self, output_mp4_path: str):
+        output_messgae = "Render completed"
         self.thinking_ended.emit()
         self.show_reply.emit(output_messgae)
+        self.render_succeeded.emit(output_mp4_path)
+
+    def _on_render_failure(self, error_msg: str):
+        output_messgae = f"Rendering failed: {error_msg}"
+        self.thinking_ended.emit()
+        self.show_reply.emit(output_messgae)
+
 
     def pause(self) -> None:
         self._paused.set()

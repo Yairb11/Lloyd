@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QLineEdit, QPushButton, QScrollArea, QV
 
 from app import config
 from app.threads import Agent, LloydSpeaker
-from app.agent.text import clean_text_for_speech
+from app.helpers.text import clean_text_for_speech
 from app.widgets.chat_bubble import ChatBubble
 
 
@@ -14,6 +14,7 @@ class ChatPanel(QWidget):
         on_thinking_ended=None, 
         on_speaking_started=None, 
         on_speaking_ended=None,
+        on_render_success=None,
         parent: QWidget | None = None
     ) -> None:
         
@@ -25,6 +26,7 @@ class ChatPanel(QWidget):
         self.on_thinking_ended = on_thinking_ended
         self.on_speaking_started = on_speaking_started
         self.on_speaking_ended = on_speaking_ended
+        self.on_render_success = on_render_success
         self.agent = None
         self.lloyd_speaker = LloydSpeaker(self)
 
@@ -78,6 +80,7 @@ class ChatPanel(QWidget):
         self.agent.show_reply.connect(self._on_show_reply)
         self.agent.thinking_started.connect(self._on_thinking_started)
         self.agent.thinking_ended.connect(self._on_thinking_ended)
+        self.agent.render_succeeded.connect(self.on_render_success)
 
         self.agent.start()
 

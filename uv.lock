@@ -452,6 +452,7 @@ dependencies = [
     { name = "manim" },
     { name = "pygame" },
     { name = "pyqt6" },
+    { name = "pyqt6-qt6" },
 ]
 
 [package.metadata]
@@ -460,6 +461,7 @@ requires-dist = [
     { name = "manim", specifier = ">=0.21.0" },
     { name = "pygame", specifier = ">=2.6.1" },
     { name = "pyqt6" },
+    { name = "pyqt6-qt6", specifier = ">=6.11.2" },
 ]
 
 [[package]]
