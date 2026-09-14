@@ -63,4 +63,8 @@ def build_stylesheet() -> str:
         background-color: transparent;
         border: none;
     }}
+    QPushButton#micToggleButton:checked {{
+        border: 1px solid #ff5c5c;
+        color: #ff5c5c;
+    }}
     """

@@ -2,15 +2,31 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QHBoxLayout, QLineEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
 from app import config
-from app.agent import get_reply
+from app.threads import Agent, LloydSpeaker
+from app.agent.text import clean_text_for_speech
 from app.widgets.chat_bubble import ChatBubble
 
 
 class ChatPanel(QWidget):
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, 
+        on_thinking_started=None, 
+        on_thinking_ended=None, 
+        on_speaking_started=None, 
+        on_speaking_ended=None,
+        parent: QWidget | None = None
+    ) -> None:
+        
         super().__init__(parent)
         self.setObjectName("chatPanel")
         self.setMinimumWidth(config.CHAT_PANEL_MIN_WIDTH)
+
+        self.on_thinking_started = on_thinking_started
+        self.on_thinking_ended = on_thinking_ended
+        self.on_speaking_started = on_speaking_started
+        self.on_speaking_ended = on_speaking_ended
+        self.agent = None
+        self.lloyd_speaker = LloydSpeaker(self)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
@@ -48,12 +64,41 @@ class ChatPanel(QWidget):
         message = self.input.text().strip()
         if not message:
             return
+        self.input.clear()
+        self.submit_message(message)
+
+    def submit_message(self, message: str) -> None:
+        message = message.strip()
+        if not message:
+            return
 
         self._append_bubble(message, is_user=True)
-        self.input.clear()
+        self.agent = Agent(message)
+        self.agent.error_occurred.connect(self._on_agent_error)
+        self.agent.show_reply.connect(self._on_show_reply)
+        self.agent.thinking_started.connect(self._on_thinking_started)
+        self.agent.thinking_ended.connect(self._on_thinking_ended)
 
-        reply = get_reply(message)
+        self.agent.start()
+
+    def _on_agent_error(self, message: str) -> None:    
+        print(f"[Lloyd agent] {message}")
+
+    def _on_thinking_started(self) -> None:
+        self.on_thinking_started()
+        # SEE 3 DOTS MOVING INSIDE THE BUBBLE MESSAGES AS THE NON USER
+
+    def _on_thinking_ended(self) -> None:
+        self.on_thinking_ended()
+        # STOP SEEN 3 DOTS MOVING INSIDE THE BUBBLE MESSAGES AS THE NON USER
+
+    def _on_show_reply(self, reply: str) -> None:
         self._append_bubble(str(reply), is_user=False)
+
+        speech_text = clean_text_for_speech(str(reply))
+        if speech_text:
+            self.lloyd_speaker.speak(speech_text)
+        
 
     def _append_bubble(self, text: str, is_user: bool) -> None:
         bubble = ChatBubble(text, is_user, self.history_content)

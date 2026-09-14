@@ -1,8 +1,9 @@
-from PyQt6.QtCore import QByteArray, QSettings, Qt
+from PyQt6.QtCore import QByteArray, QSettings, Qt, QTimer
 from PyQt6.QtGui import QCloseEvent, QKeySequence, QShortcut, QShowEvent
 from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QSplitter, QWidget
 
 from app import config, theme
+from app.threads import VoiceListener
 from app.widgets.canvas_panel import CanvasPanel
 from app.widgets.chat_panel import ChatPanel
 from app.win_dark_mode import enable_dark_titlebar
@@ -27,7 +28,13 @@ class MainWindow(QMainWindow):
         self.splitter.setHandleWidth(config.SPLITTER_HANDLE_WIDTH)
 
         self.canvas_panel = CanvasPanel(self.splitter)
-        self.chat_panel = ChatPanel(self.splitter)
+        self.chat_panel = ChatPanel(
+            on_thinking_started=self._on_thinking_started, 
+            on_thinking_ended=self._on_thinking_ended,
+            on_speaking_started=self._on_speaking_started,
+            on_speaking_ended=self._on_speaking_ended,
+            parent=self.splitter
+        )
         self.splitter.addWidget(self.canvas_panel)
         self.splitter.addWidget(self.chat_panel)
         self.splitter.setStretchFactor(0, 3)
@@ -39,6 +46,7 @@ class MainWindow(QMainWindow):
 
         self._setup_shortcuts()
         self._restore_settings()
+        self._setup_voice_listener()
 
     def _setup_shortcuts(self) -> None:
         QShortcut(QKeySequence(config.FULLSCREEN_SHORTCUT_F11), self, activated=self.toggle_fullscreen)
@@ -62,6 +70,64 @@ class MainWindow(QMainWindow):
 
         self._is_fullscreen = self.isFullScreen()
 
+    def _setup_voice_listener(self) -> None:
+        self.voice_listener = VoiceListener(self)
+        self.voice_listener.wake_word_detected.connect(self._on_wake_word_detected)
+        self.voice_listener.error_occurred.connect(self._on_voice_error)
+        self.voice_listener.speech_started.connect(self._on_speach_started)
+        self.voice_listener.speech_ended.connect(self._on_speach_ended)
+
+        #========================================================================================================
+        #self.canvas_panel.mic_toggle_button.toggled.connect(self._on_mic_toggle)
+        self._on_mic_toggle(True)
+        #========================================================================================================
+        
+        self.voice_listener.start()
+
+    def _on_wake_word_detected(self, text: str) -> None:
+        self.chat_panel.submit_message(text)
+
+    def _on_speach_started(self):
+        # Change sphere to blue, big and a little shrink and grow
+        sphere = self.canvas_panel.sphere
+        sphere.set_color(config.SPHERE_COLOR_LISTENING)
+        sphere.grow()
+
+    def _on_speach_ended(self):
+        # Change back the sphere to ohere colors, with breathing animation
+        sphere = self.canvas_panel.sphere
+        sphere.shrink()
+        sphere.release_color()
+
+    def _on_thinking_started(self):
+        # Change the sphere to thinking mode view
+        pass
+
+    def _on_thinking_ended(self):
+        # Change back the sphere to ohere colors, with breathing animation
+        pass
+
+    def _on_speaking_started(self):
+        # Change the sphere to speaking mode view
+        pass
+
+    def _on_speaking_ended(self):
+        # Change back the sphere to ohere colors, with breathing animation
+        pass
+
+
+    def _on_mic_toggle(self, muted: bool) -> None:
+        button = self.canvas_panel.mic_toggle_button
+        if muted:
+            self.voice_listener.pause()
+            button.setText("Mic: Muted")
+        else:
+            self.voice_listener.resume()
+            button.setText("Mic: Listening")
+
+    def _on_voice_error(self, message: str) -> None:
+        print(f"[Lloyd voice] {message}")
+
     def toggle_fullscreen(self) -> None:
         if self._is_fullscreen:
             self.showNormal()
@@ -77,6 +143,8 @@ class MainWindow(QMainWindow):
             self._dark_titlebar_applied = True
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        self.voice_listener.stop()
+
         settings = QSettings(config.ORG_NAME, config.APP_NAME)
         settings.setValue(config.SETTINGS_GEOMETRY_KEY, self.saveGeometry())
         settings.setValue(config.SETTINGS_SPLITTER_STATE_KEY, self.splitter.saveState())

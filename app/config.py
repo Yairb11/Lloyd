@@ -45,3 +45,10 @@ SPHERE_COLOR_TRANSITION_DURATION_MS: int = 500
 
 SETTINGS_GEOMETRY_KEY: str = "window/geometry"
 SETTINGS_SPLITTER_STATE_KEY: str = "window/splitter_state"
+
+# Voice Input
+VOICE_WAKE_WORDS = ("lloyd", "hey lloyd")
+VOICE_RECOGNITION_LANGUAGE: str = "en-US"
+
+SPHERE_COLOR_LISTENING: str = "#2f8fff"
+
