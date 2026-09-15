@@ -1,10 +1,22 @@
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QHBoxLayout, QLineEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
-from app import config
-from app.threads import Agent, LloydSpeaker
+from app.config import (
+    CHAT_HISTORY_SPACING,
+    CHAT_INPUT_PLACEHOLDER,
+    CHAT_INPUT_ROW_SPACING,
+    CHAT_PANEL_MARGIN,
+    CHAT_PANEL_MIN_WIDTH,
+    CHAT_PANEL_SPACING,
+    CHAT_SEND_BUTTON_TEXT,
+    LOG_PREFIX_AGENT,
+    OBJECT_NAME_CHAT_HISTORY,
+    OBJECT_NAME_CHAT_PANEL,
+)
 from app.helpers.text import clean_text_for_speech
+from app.threads import Agent, LloydSpeaker
 from app.widgets.chat_bubble import ChatBubble
+from app.widgets.typing_indicator import TypingIndicator
 
 
 class ChatPanel(QWidget):
@@ -19,8 +31,8 @@ class ChatPanel(QWidget):
     ) -> None:
         
         super().__init__(parent)
-        self.setObjectName("chatPanel")
-        self.setMinimumWidth(config.CHAT_PANEL_MIN_WIDTH)
+        self.setObjectName(OBJECT_NAME_CHAT_PANEL)
+        self.setMinimumWidth(CHAT_PANEL_MIN_WIDTH)
 
         self.on_thinking_started = on_thinking_started
         self.on_thinking_ended = on_thinking_ended
@@ -29,32 +41,35 @@ class ChatPanel(QWidget):
         self.on_render_success = on_render_success
         self.agent = None
         self.lloyd_speaker = LloydSpeaker(self)
+        self.lloyd_speaker.speech_started.connect(self.on_speaking_started)
+        self.lloyd_speaker.speech_finished.connect(self.on_speaking_ended)
+        self._typing_indicator: TypingIndicator | None = None
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(CHAT_PANEL_MARGIN, CHAT_PANEL_MARGIN, CHAT_PANEL_MARGIN, CHAT_PANEL_MARGIN)
+        layout.setSpacing(CHAT_PANEL_SPACING)
 
         self.history_content = QWidget()
         self.history_layout = QVBoxLayout(self.history_content)
         self.history_layout.setContentsMargins(0, 0, 0, 0)
-        self.history_layout.setSpacing(8)
+        self.history_layout.setSpacing(CHAT_HISTORY_SPACING)
         self.history_layout.addStretch(1)
 
         self.history_scroll = QScrollArea(self)
-        self.history_scroll.setObjectName("chatHistory")
+        self.history_scroll.setObjectName(OBJECT_NAME_CHAT_HISTORY)
         self.history_scroll.setWidgetResizable(True)
         self.history_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.history_scroll.setWidget(self.history_content)
         layout.addWidget(self.history_scroll)
 
         input_row = QHBoxLayout()
-        input_row.setSpacing(8)
+        input_row.setSpacing(CHAT_INPUT_ROW_SPACING)
 
         self.input = QLineEdit(self)
-        self.input.setPlaceholderText("Message Lloyd...")
+        self.input.setPlaceholderText(CHAT_INPUT_PLACEHOLDER)
         input_row.addWidget(self.input)
 
-        self.send_button = QPushButton("Send", self)
+        self.send_button = QPushButton(CHAT_SEND_BUTTON_TEXT, self)
         input_row.addWidget(self.send_button)
 
         layout.addLayout(input_row)
@@ -85,15 +100,28 @@ class ChatPanel(QWidget):
         self.agent.start()
 
     def _on_agent_error(self, message: str) -> None:    
-        print(f"[Lloyd agent] {message}")
+        print(f"{LOG_PREFIX_AGENT} {message}")
 
     def _on_thinking_started(self) -> None:
         self.on_thinking_started()
-        # SEE 3 DOTS MOVING INSIDE THE BUBBLE MESSAGES AS THE NON USER
+        self._show_typing_indicator()
 
     def _on_thinking_ended(self) -> None:
         self.on_thinking_ended()
-        # STOP SEEN 3 DOTS MOVING INSIDE THE BUBBLE MESSAGES AS THE NON USER
+        self._hide_typing_indicator()
+
+    def _show_typing_indicator(self) -> None:
+        self._typing_indicator = TypingIndicator(self.history_content)
+        self.history_layout.insertWidget(self.history_layout.count() - 1, self._typing_indicator)
+        QTimer.singleShot(0, self._scroll_to_bottom)
+
+    def _hide_typing_indicator(self) -> None:
+        if self._typing_indicator is None:
+            return
+        self._typing_indicator.stop()
+        self.history_layout.removeWidget(self._typing_indicator)
+        self._typing_indicator.deleteLater()
+        self._typing_indicator = None
 
     def _on_show_reply(self, reply: str) -> None:
         self._append_bubble(str(reply), is_user=False)

@@ -1,10 +1,10 @@
 import threading
-from PyQt6.QtCore import QThread, pyqtSignal
 import time
+from PyQt6.QtCore import QThread, pyqtSignal
 
-from app.threads.manim_render_worker import ManimRenderWorker
 from app.threads.bottle_scan_worker import BottleScanWorker
-from app.config import *
+from app.threads.manim_render_worker import ManimRenderWorker
+
 
 class Agent(QThread):
     thinking_started = pyqtSignal()

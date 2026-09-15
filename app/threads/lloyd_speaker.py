@@ -1,14 +1,15 @@
 import asyncio
 import io
-from PyQt6.QtCore import QThread, pyqtSignal
 import edge_tts
 import pygame
+from PyQt6.QtCore import QThread, pyqtSignal
+
+from app.config import LOG_PREFIX_ERROR, TTS_POLL_INTERVAL_MS, TTS_VOICE
+
 
 class LloydSpeaker(QThread):
     speech_started = pyqtSignal()
     speech_finished = pyqtSignal()
-
-    VOICE = "en-GB-RyanNeural"
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -29,12 +30,12 @@ class LloydSpeaker(QThread):
         try:
             asyncio.run(self._synthesize_and_play(self._text))
         except Exception as exc:
-            print(f"[Lloyd Error]: {exc}")
+            print(f"{LOG_PREFIX_ERROR}: {exc}")
         finally:
             self.speech_finished.emit()
 
     async def _synthesize_and_play(self, text: str) -> None:
-        communicate = edge_tts.Communicate(text, self.VOICE)
+        communicate = edge_tts.Communicate(text, TTS_VOICE)
         audio_stream = io.BytesIO()
 
         async for chunk in communicate.stream():
@@ -46,7 +47,7 @@ class LloydSpeaker(QThread):
         pygame.mixer.music.play()
 
         while pygame.mixer.music.get_busy() and not self.isInterruptionRequested():
-            self.msleep(50)
+            self.msleep(TTS_POLL_INTERVAL_MS)
 
     def stop(self) -> None:
         pygame.mixer.music.stop()

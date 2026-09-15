@@ -1,13 +1,12 @@
-import sys
 import re
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 import cv2
 import easyocr
 import numpy as np
+from PyQt6.QtCore import QThread, pyqtSignal
 from thefuzz import fuzz
 from ultralytics import YOLO
-from PyQt6.QtCore import QThread, pyqtSignal
 
 GLOBAL_BAR_BRANDS: Dict[str, List[str]] = {
     "Lagavulin": ["lagavulin", "lagavuli"],
@@ -206,4 +205,3 @@ class BottleScanWorker(QThread):
 
         except Exception as e:
             self.scan_failed.emit(str(e))
-

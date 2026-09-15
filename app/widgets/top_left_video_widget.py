@@ -1,7 +1,6 @@
 import os
 import sys
-
-from PyQt6.QtCore import QUrl, Qt, QPoint, QRect
+from PyQt6.QtCore import QPoint, QRect, Qt, QUrl
 from PyQt6.QtGui import QCursor
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PyQt6.QtMultimediaWidgets import QVideoWidget
@@ -13,14 +12,38 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-class TopLeftVideoWidget(QFrame):
-    BORDER_MARGIN = 8
-    MIN_WIDTH = 260
-    MIN_HEIGHT = 160
+from app.config import (
+    COLOR_CLOSE_BUTTON_BG,
+    COLOR_CLOSE_BUTTON_HOVER_BG,
+    COLOR_CLOSE_BUTTON_TEXT,
+    COLOR_VIDEO_BG,
+    COLOR_VIDEO_BORDER,
+    COLOR_VIDEO_PLAYER_BG,
+    COLOR_VIDEO_TITLE,
+    FONT_SIZE_CLOSE_BUTTON,
+    FONT_SIZE_VIDEO_TITLE,
+    OBJECT_NAME_VIDEO_WIDGET,
+    VIDEO_BORDER_MARGIN,
+    VIDEO_BORDER_RADIUS,
+    VIDEO_BORDER_WIDTH,
+    VIDEO_CLOSE_BUTTON_RADIUS,
+    VIDEO_CLOSE_BUTTON_SIZE,
+    VIDEO_CLOSE_GLYPH,
+    VIDEO_DEFAULT_HEIGHT,
+    VIDEO_DEFAULT_TITLE,
+    VIDEO_DEFAULT_WIDTH,
+    VIDEO_HEADER_HEIGHT,
+    VIDEO_MIN_HEIGHT,
+    VIDEO_MIN_WIDTH,
+    VIDEO_PLAYER_BORDER_RADIUS,
+    VIDEO_TITLE_MAX_LENGTH,
+)
 
-    def __init__(self, parent=None, width: int = 380, height: int = 240):
+
+class TopLeftVideoWidget(QFrame):
+    def __init__(self, parent=None, width: int = VIDEO_DEFAULT_WIDTH, height: int = VIDEO_DEFAULT_HEIGHT):
         super().__init__(parent)
-        self.setMinimumSize(self.MIN_WIDTH, self.MIN_HEIGHT)
+        self.setMinimumSize(VIDEO_MIN_WIDTH, VIDEO_MIN_HEIGHT)
         self.resize(width, height)
         self.setMouseTracking(True)
 
@@ -30,44 +53,44 @@ class TopLeftVideoWidget(QFrame):
         self._press_pos = QPoint()
         self._press_geom = QRect()
 
-        self.setStyleSheet("""
-            QFrame#TopLeftVideoWidget {
-                background-color: #0b0f19;
-                border: 2px solid #00E5FF;
-                border-radius: 8px;
-            }
+        self.setStyleSheet(f"""
+            QFrame#{OBJECT_NAME_VIDEO_WIDGET} {{
+                background-color: {COLOR_VIDEO_BG};
+                border: {VIDEO_BORDER_WIDTH}px solid {COLOR_VIDEO_BORDER};
+                border-radius: {VIDEO_BORDER_RADIUS}px;
+            }}
         """)
-        self.setObjectName("TopLeftVideoWidget")
+        self.setObjectName(OBJECT_NAME_VIDEO_WIDGET)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 4, 6, 6)
         layout.setSpacing(2)
 
         self.header_frame = QFrame(self)
-        self.header_frame.setFixedHeight(22)
+        self.header_frame.setFixedHeight(VIDEO_HEADER_HEIGHT)
         self.header_frame.setStyleSheet("background: transparent; border: none;")
         header_layout = QHBoxLayout(self.header_frame)
         header_layout.setContentsMargins(4, 0, 4, 0)
         header_layout.setSpacing(4)
 
-        self.title_label = QLabel("ANIMATION PREVIEW", self.header_frame)
-        self.title_label.setStyleSheet("color: #00E5FF; font-weight: bold; font-size: 11px; border: none;")
+        self.title_label = QLabel(VIDEO_DEFAULT_TITLE, self.header_frame)
+        self.title_label.setStyleSheet(f"color: {COLOR_VIDEO_TITLE}; font-weight: bold; font-size: {FONT_SIZE_VIDEO_TITLE}px; border: none;")
         header_layout.addWidget(self.title_label)
 
         header_layout.addStretch()
 
-        close_btn = QPushButton("✕", self.header_frame)
-        close_btn.setFixedSize(16, 16)
-        close_btn.setStyleSheet("""
-            QPushButton {
-                color: #FFFFFF;
-                background-color: #C62828;
+        close_btn = QPushButton(VIDEO_CLOSE_GLYPH, self.header_frame)
+        close_btn.setFixedSize(VIDEO_CLOSE_BUTTON_SIZE, VIDEO_CLOSE_BUTTON_SIZE)
+        close_btn.setStyleSheet(f"""
+            QPushButton {{
+                color: {COLOR_CLOSE_BUTTON_TEXT};
+                background-color: {COLOR_CLOSE_BUTTON_BG};
                 border: none;
-                border-radius: 8px;
-                font-size: 9px;
+                border-radius: {VIDEO_CLOSE_BUTTON_RADIUS}px;
+                font-size: {FONT_SIZE_CLOSE_BUTTON}px;
                 font-weight: bold;
-            }
-            QPushButton:hover { background-color: #E53935; }
+            }}
+            QPushButton:hover {{ background-color: {COLOR_CLOSE_BUTTON_HOVER_BG}; }}
         """)
         close_btn.clicked.connect(self.close_preview)
         header_layout.addWidget(close_btn)
@@ -75,7 +98,7 @@ class TopLeftVideoWidget(QFrame):
         layout.addWidget(self.header_frame)
 
         self.video_widget = QVideoWidget(self)
-        self.video_widget.setStyleSheet("border-radius: 4px; border: none; background-color: #000000;")
+        self.video_widget.setStyleSheet(f"border-radius: {VIDEO_PLAYER_BORDER_RADIUS}px; border: none; background-color: {COLOR_VIDEO_PLAYER_BG};")
         self.video_widget.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self.video_widget.installEventFilter(self)
         layout.addWidget(self.video_widget, stretch=1)
@@ -91,9 +114,9 @@ class TopLeftVideoWidget(QFrame):
             self.player.setPosition(0)
             self.player.play()
 
-    def play_video(self, file_path: str, title: str = "RECIPE VISUALIZATION"):
+    def play_video(self, file_path: str, title: str = VIDEO_DEFAULT_TITLE):
         self._active_video_path = file_path
-        self.title_label.setText(title[:30].upper())
+        self.title_label.setText(title[:VIDEO_TITLE_MAX_LENGTH].upper())
         self.player.setSource(QUrl.fromLocalFile(file_path))
         self.show()
         self.raise_()
@@ -124,7 +147,7 @@ class TopLeftVideoWidget(QFrame):
 
     def _get_resize_edges(self, pos: QPoint) -> dict[str, bool]:
         rect = self.rect()
-        m = self.BORDER_MARGIN
+        m = VIDEO_BORDER_MARGIN
         return {
             "right": pos.x() >= rect.width() - m,
             "bottom": pos.y() >= rect.height() - m,
@@ -163,9 +186,9 @@ class TopLeftVideoWidget(QFrame):
             new_h = self._press_geom.height()
 
             if self._resize_edges["right"]:
-                new_w = max(self.MIN_WIDTH, new_w + delta.x())
+                new_w = max(VIDEO_MIN_WIDTH, new_w + delta.x())
             if self._resize_edges["bottom"]:
-                new_h = max(self.MIN_HEIGHT, new_h + delta.y())
+                new_h = max(VIDEO_MIN_HEIGHT, new_h + delta.y())
 
             self.resize(new_w, new_h)
             event.accept()

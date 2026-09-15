@@ -2,7 +2,7 @@ import ctypes
 import sys
 from ctypes import wintypes
 
-_DWMWA_USE_IMMERSIVE_DARK_MODE: int = 20
+from app.config import WIN_DWM_IMMERSIVE_DARK_MODE_ATTRIBUTE
 
 
 def enable_dark_titlebar(window_handle: int) -> None:
@@ -12,7 +12,7 @@ def enable_dark_titlebar(window_handle: int) -> None:
     try:
         ctypes.windll.dwmapi.DwmSetWindowAttribute(
             wintypes.HWND(window_handle),
-            _DWMWA_USE_IMMERSIVE_DARK_MODE,
+            WIN_DWM_IMMERSIVE_DARK_MODE_ATTRIBUTE,
             ctypes.byref(value),
             ctypes.sizeof(value),
         )

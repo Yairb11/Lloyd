@@ -1,28 +1,34 @@
 import re
 
-# Move to config.py 
-# Maybe Ill add something more to here
-def clean_text_for_speech(text: str) -> str:
-    text = re.sub(r"[\*#_`~]", "", text)
-    text = re.sub(
-        r"[\U00010000-\U0010ffff]", "", text
-    )
+from app.config import (
+    SPEECH_CELSIUS_PATTERN,
+    SPEECH_CELSIUS_REPLACEMENT,
+    SPEECH_CL_PATTERN,
+    SPEECH_CL_REPLACEMENT,
+    SPEECH_FRACTION_REPLACEMENTS,
+    SPEECH_ML_PATTERN,
+    SPEECH_ML_REPLACEMENT,
+    SPEECH_NUMBER_RANGE_PATTERN,
+    SPEECH_NUMBER_RANGE_REPLACEMENT,
+    SPEECH_OZ_PATTERN,
+    SPEECH_OZ_REPLACEMENT,
+    SPEECH_STRIP_EMOJI_PATTERN,
+    SPEECH_STRIP_MARKDOWN_PATTERN,
+)
 
-    fractions = {
-        "1/2": "half",
-        "1/4": "quarter",
-        "3/4": "three quarters",
-        "1/3": "one third",
-        "2/3": "two thirds",
-    }
-    for frac, replacement in fractions.items():
+
+def clean_text_for_speech(text: str) -> str:
+    text = re.sub(SPEECH_STRIP_MARKDOWN_PATTERN, "", text)
+    text = re.sub(SPEECH_STRIP_EMOJI_PATTERN, "", text)
+
+    for frac, replacement in SPEECH_FRACTION_REPLACEMENTS.items():
         text = re.sub(rf"\b{re.escape(frac)}\b", replacement, text)
 
-    text = re.sub(r"(\d+(?:\.\d+)?)\s*ml\b", r"\1 milliliters", text, flags=re.IGNORECASE)
-    text = re.sub(r"(\d+(?:\.\d+)?)\s*cl\b", r"\1 centiliters", text, flags=re.IGNORECASE)
-    text = re.sub(r"(\d+(?:\.\d+)?)\s*oz\b", r"\1 ounces", text, flags=re.IGNORECASE)
+    text = re.sub(SPEECH_ML_PATTERN, SPEECH_ML_REPLACEMENT, text, flags=re.IGNORECASE)
+    text = re.sub(SPEECH_CL_PATTERN, SPEECH_CL_REPLACEMENT, text, flags=re.IGNORECASE)
+    text = re.sub(SPEECH_OZ_PATTERN, SPEECH_OZ_REPLACEMENT, text, flags=re.IGNORECASE)
 
-    text = re.sub(r"(\d+)\s*-\s*(\d+)", r"\1 to \2", text)
-    text = re.sub(r"(\d+)\s*°\s*C", r"\1 degrees Celsius", text)
+    text = re.sub(SPEECH_NUMBER_RANGE_PATTERN, SPEECH_NUMBER_RANGE_REPLACEMENT, text)
+    text = re.sub(SPEECH_CELSIUS_PATTERN, SPEECH_CELSIUS_REPLACEMENT, text)
 
     return text.strip()

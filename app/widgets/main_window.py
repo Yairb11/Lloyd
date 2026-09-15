@@ -1,9 +1,31 @@
-from PyQt6.QtCore import QByteArray, QSettings, Qt, QTimer
+from pathlib import Path
+from PyQt6.QtCore import QByteArray, QSettings, Qt
 from PyQt6.QtGui import QCloseEvent, QKeySequence, QShortcut, QShowEvent
 from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QSplitter, QWidget
-from pathlib import Path
 
-from app import config, theme
+from app.config import (
+    APP_NAME,
+    FULLSCREEN_SHORTCUT_ESC,
+    FULLSCREEN_SHORTCUT_F11,
+    LOG_PREFIX_VOICE,
+    MIC_BUTTON_LISTENING_TEXT,
+    MIC_BUTTON_MUTED_TEXT,
+    ORG_NAME,
+    SETTINGS_GEOMETRY_KEY,
+    SETTINGS_SPLITTER_STATE_KEY,
+    SPLITTER_DEFAULT_CANVAS_RATIO,
+    SPLITTER_DEFAULT_CHAT_RATIO,
+    SPLITTER_HANDLE_WIDTH,
+    SPLITTER_STRETCH_CANVAS,
+    SPLITTER_STRETCH_CHAT,
+    VIDEO_PREVIEW_DEFAULT_HEIGHT,
+    VIDEO_PREVIEW_DEFAULT_WIDTH,
+    VIDEO_PREVIEW_POSITION_OFFSET,
+    WINDOW_MIN_HEIGHT,
+    WINDOW_MIN_WIDTH,
+    WINDOW_TITLE,
+)
+from app.theme import build_stylesheet
 from app.threads import VoiceListener
 from app.widgets.canvas_panel import CanvasPanel
 from app.widgets.chat_panel import ChatPanel
@@ -14,9 +36,9 @@ from app.win_dark_mode import enable_dark_titlebar
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle(config.WINDOW_TITLE)
-        self.setMinimumSize(config.WINDOW_MIN_WIDTH, config.WINDOW_MIN_HEIGHT)
-        self.setStyleSheet(theme.build_stylesheet())
+        self.setWindowTitle(WINDOW_TITLE)
+        self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
+        self.setStyleSheet(build_stylesheet())
 
         self._is_fullscreen: bool = False
         self._dark_titlebar_applied: bool = False
@@ -27,7 +49,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(0)
 
         self.splitter = QSplitter(Qt.Orientation.Horizontal, central)
-        self.splitter.setHandleWidth(config.SPLITTER_HANDLE_WIDTH)
+        self.splitter.setHandleWidth(SPLITTER_HANDLE_WIDTH)
 
         self.canvas_panel = CanvasPanel(self.splitter)
         self.chat_panel = ChatPanel(
@@ -40,8 +62,8 @@ class MainWindow(QMainWindow):
         )
         self.splitter.addWidget(self.canvas_panel)
         self.splitter.addWidget(self.chat_panel)
-        self.splitter.setStretchFactor(0, 3)
-        self.splitter.setStretchFactor(1, 1)
+        self.splitter.setStretchFactor(0, SPLITTER_STRETCH_CANVAS)
+        self.splitter.setStretchFactor(1, SPLITTER_STRETCH_CHAT)
 
         layout.addWidget(self.splitter)
 
@@ -51,34 +73,34 @@ class MainWindow(QMainWindow):
         self._restore_settings()
         self._setup_voice_listener()
 
-        self.video_preview = TopLeftVideoWidget(self, width=420, height=260)
-        self.video_preview.move(25, 25)
+        self.video_preview = TopLeftVideoWidget(self, width=VIDEO_PREVIEW_DEFAULT_WIDTH, height=VIDEO_PREVIEW_DEFAULT_HEIGHT)
+        self.video_preview.move(VIDEO_PREVIEW_POSITION_OFFSET, VIDEO_PREVIEW_POSITION_OFFSET)
         self.video_preview.hide()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self.video_preview.move(25, 25)
+        self.video_preview.move(VIDEO_PREVIEW_POSITION_OFFSET, VIDEO_PREVIEW_POSITION_OFFSET)
         self.video_preview.raise_()
 
     def _setup_shortcuts(self) -> None:
-        QShortcut(QKeySequence(config.FULLSCREEN_SHORTCUT_F11), self, activated=self.toggle_fullscreen)
-        QShortcut(QKeySequence(config.FULLSCREEN_SHORTCUT_ESC), self, activated=self.toggle_fullscreen)
+        QShortcut(QKeySequence(FULLSCREEN_SHORTCUT_F11), self, activated=self.toggle_fullscreen)
+        QShortcut(QKeySequence(FULLSCREEN_SHORTCUT_ESC), self, activated=self.toggle_fullscreen)
 
     def _restore_settings(self) -> None:
-        settings = QSettings(config.ORG_NAME, config.APP_NAME)
+        settings = QSettings(ORG_NAME, APP_NAME)
 
-        geometry = settings.value(config.SETTINGS_GEOMETRY_KEY)
+        geometry = settings.value(SETTINGS_GEOMETRY_KEY)
         if isinstance(geometry, QByteArray):
             self.restoreGeometry(geometry)
         else:
-            self.resize(config.WINDOW_MIN_WIDTH, config.WINDOW_MIN_HEIGHT)
+            self.resize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
 
-        splitter_state = settings.value(config.SETTINGS_SPLITTER_STATE_KEY)
+        splitter_state = settings.value(SETTINGS_SPLITTER_STATE_KEY)
         if isinstance(splitter_state, QByteArray):
             self.splitter.restoreState(splitter_state)
         else:
             width = self.width()
-            self.splitter.setSizes([int(width * 0.75), int(width * 0.25)])
+            self.splitter.setSizes([int(width * SPLITTER_DEFAULT_CANVAS_RATIO), int(width * SPLITTER_DEFAULT_CHAT_RATIO)])
 
         self._is_fullscreen = self.isFullScreen()
 
@@ -86,8 +108,8 @@ class MainWindow(QMainWindow):
         self.voice_listener = VoiceListener(self)
         self.voice_listener.wake_word_detected.connect(self._on_wake_word_detected)
         self.voice_listener.error_occurred.connect(self._on_voice_error)
-        self.voice_listener.speech_started.connect(self._on_speach_started)
-        self.voice_listener.speech_ended.connect(self._on_speach_ended)
+        self.voice_listener.speech_started.connect(self._on_speech_started)
+        self.voice_listener.speech_ended.connect(self._on_speech_ended)
 
         #========================================================================================================
         #self.canvas_panel.mic_toggle_button.toggled.connect(self._on_mic_toggle)
@@ -99,49 +121,38 @@ class MainWindow(QMainWindow):
     def _on_wake_word_detected(self, text: str) -> None:
         self.chat_panel.submit_message(text)
 
-    def _on_speach_started(self):
-        # Change sphere to blue, big and a little shrink and grow
-        sphere = self.canvas_panel.sphere
-        sphere.set_color(config.SPHERE_COLOR_LISTENING)
-        sphere.grow()
+    def _on_speech_started(self):
+        self.canvas_panel.sphere.enter_listening()
 
-    def _on_speach_ended(self):
-        # Change back the sphere to ohere colors, with breathing animation
-        sphere = self.canvas_panel.sphere
-        sphere.shrink()
-        sphere.release_color()
+    def _on_speech_ended(self):
+        self.canvas_panel.sphere.enter_idle()
 
     def _on_thinking_started(self):
-        # Change the sphere to thinking mode view
-        pass
+        self.canvas_panel.sphere.enter_thinking()
 
     def _on_thinking_ended(self):
-        # Change back the sphere to ohere colors, with breathing animation
-        pass
+        self.canvas_panel.sphere.enter_idle()
 
     def _on_render_success(self, output_mp4_path: str):
         self.video_preview.play_video(output_mp4_path, title=Path(output_mp4_path).stem)
 
     def _on_speaking_started(self):
-        # Change the sphere to speaking mode view
-        pass
+        self.canvas_panel.sphere.enter_speaking()
 
     def _on_speaking_ended(self):
-        # Change back the sphere to ohere colors, with breathing animation
-        pass
-
+        self.canvas_panel.sphere.enter_idle()
 
     def _on_mic_toggle(self, muted: bool) -> None:
         button = self.canvas_panel.mic_toggle_button
         if muted:
             self.voice_listener.pause()
-            button.setText("Mic: Muted")
+            button.setText(MIC_BUTTON_MUTED_TEXT)
         else:
             self.voice_listener.resume()
-            button.setText("Mic: Listening")
+            button.setText(MIC_BUTTON_LISTENING_TEXT)
 
     def _on_voice_error(self, message: str) -> None:
-        print(f"[Lloyd voice] {message}")
+        print(f"{LOG_PREFIX_VOICE} {message}")
 
     def toggle_fullscreen(self) -> None:
         if self._is_fullscreen:
@@ -160,7 +171,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:
         self.voice_listener.stop()
 
-        settings = QSettings(config.ORG_NAME, config.APP_NAME)
-        settings.setValue(config.SETTINGS_GEOMETRY_KEY, self.saveGeometry())
-        settings.setValue(config.SETTINGS_SPLITTER_STATE_KEY, self.splitter.saveState())
+        settings = QSettings(ORG_NAME, APP_NAME)
+        settings.setValue(SETTINGS_GEOMETRY_KEY, self.saveGeometry())
+        settings.setValue(SETTINGS_SPLITTER_STATE_KEY, self.splitter.saveState())
         super().closeEvent(event)

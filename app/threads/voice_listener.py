@@ -1,8 +1,6 @@
 import threading
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from app.config import *
-
 
 class VoiceListener(QThread):
 

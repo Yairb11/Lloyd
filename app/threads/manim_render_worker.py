@@ -1,12 +1,12 @@
-import re
 import json
+import re
 import shutil
 from pathlib import Path
+from manim import config as manim_config
 from PyQt6.QtCore import QThread, pyqtSignal
-from manim import config
 
+from app.config import MANIM_OUTPUT_DIR, MANIM_QUALITY, MANIM_TEMP_DIR_PREFIX, MANIM_VERBOSITY, MANIM_VIDEO_EXTENSION
 from app.helpers.cocktail_animation_scene import CocktailAnimationScene
-
 
 
 class ManimRenderWorker(QThread):
@@ -27,27 +27,27 @@ class ManimRenderWorker(QThread):
         cocktail_name = parsed_data.get("name", "Cocktail")
         base_filename = self.sanitize_filename(cocktail_name)
 
-        output_dir = Path("output")
+        output_dir = Path(MANIM_OUTPUT_DIR)
         output_dir.mkdir(parents=True, exist_ok=True)
-        final_mp4 = (output_dir / f"{base_filename}.mp4").resolve()
+        final_mp4 = (output_dir / f"{base_filename}{MANIM_VIDEO_EXTENSION}").resolve()
 
-        temp_media_dir = Path(f"media_temp_{base_filename}")
+        temp_media_dir = Path(f"{MANIM_TEMP_DIR_PREFIX}{base_filename}")
         temp_media_dir.mkdir(parents=True, exist_ok=True)
 
-        config.media_dir = str(temp_media_dir)
-        config.output_file = base_filename
-        config.preview = False
-        config.quality = "low_quality"
-        config.verbosity = "ERROR"
+        manim_config.media_dir = str(temp_media_dir)
+        manim_config.output_file = base_filename
+        manim_config.preview = False
+        manim_config.quality = MANIM_QUALITY
+        manim_config.verbosity = MANIM_VERBOSITY
 
         try:
             scene = CocktailAnimationScene(parsed_data)
             scene.render()
 
 
-            generated_files = list(temp_media_dir.rglob(f"{base_filename}.mp4"))
+            generated_files = list(temp_media_dir.rglob(f"{base_filename}{MANIM_VIDEO_EXTENSION}"))
             if not generated_files:
-                self.rendering_failed.emit(f"Render failed: Output file {base_filename}.mp4 not found.")
+                self.rendering_failed.emit(f"Render failed: Output file {base_filename}{MANIM_VIDEO_EXTENSION} not found.")
                 return
 
             shutil.copy2(generated_files[0], final_mp4)
