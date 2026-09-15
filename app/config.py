@@ -169,14 +169,17 @@ LOG_PREFIX_AGENT: str = "[Lloyd agent]"
 LOG_PREFIX_ERROR: str = "[Lloyd Error]"
 
 # VOICE INPUT
-VOICE_WAKE_WORDS: tuple[str, ...] = ("lloyd", "hey lloyd")
+VOICE_WAKE_WORDS: tuple[str, ...] = ("hey lloyd",)
 VOICE_RECOGNITION_LANGUAGE: str = "en-US"
 
-VOICE_VOSK_MODEL_DIR: str = "models/vosk-model-small-en-us-0.15"
+VOICE_VOSK_WAKE_MODEL_DIR: str = "models/vosk-model-small-en-us-0.15"
+VOICE_VOSK_COMMAND_MODEL_DIR: str = "models/vosk-model-en-us-0.22"
 
 VOICE_SAMPLE_RATE_HZ: int = 16000
 VOICE_AUDIO_DTYPE: str = "int16"
 VOICE_BLOCK_SIZE_FRAMES: int = 2048
+
+VOICE_WAKE_MATCH_THRESHOLD: int = 85
 
 VOICE_COMMAND_START_TIMEOUT_S: float = 5.0
 VOICE_COMMAND_SILENCE_TIMEOUT_S: float = 1.2
@@ -188,8 +191,8 @@ VOICE_QUEUE_POLL_TIMEOUT_S: float = 0.2
 
 VOICE_MSG_NO_COMMAND_HEARD: str = "Didn't catch that — try again?"
 VOICE_MSG_MODEL_MISSING: str = (
-    "Voice input is unavailable: Vosk model not found. Download it and "
-    "place it in the configured model directory."
+    "Voice input is unavailable: a Vosk model was not found. Download it "
+    "and place it in the configured model directory."
 )
 
 # SPEECH TEXT CLEANING

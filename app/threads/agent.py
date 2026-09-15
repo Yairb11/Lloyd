@@ -45,7 +45,7 @@ class Agent(QThread):
             self.scan_image()
         else:
             time.sleep(1)
-            output_messgae = "For a classic Daiquiri, measure 60ml of white rum, 30ml fresh lime juice, and 1/2 oz of 2:1 rich simple syrup."
+            output_messgae = "For a classic Daiquiri."
             self.thinking_ended.emit()
             self.show_reply.emit(output_messgae)
         #===========================================================================================================================================================

@@ -7,6 +7,7 @@ import numpy as np
 import sounddevice as sd
 import vosk
 from PyQt6.QtCore import QThread, pyqtSignal
+from thefuzz import fuzz
 
 from app.config import (
     VOICE_AUDIO_DTYPE,
@@ -20,7 +21,9 @@ from app.config import (
     VOICE_QUEUE_POLL_TIMEOUT_S,
     VOICE_SAMPLE_RATE_HZ,
     VOICE_SILENCE_RMS_THRESHOLD,
-    VOICE_VOSK_MODEL_DIR,
+    VOICE_VOSK_COMMAND_MODEL_DIR,
+    VOICE_VOSK_WAKE_MODEL_DIR,
+    VOICE_WAKE_MATCH_THRESHOLD,
     VOICE_WAKE_WORDS,
 )
 
@@ -40,24 +43,28 @@ class VoiceListener(QThread):
         self._stream: sd.RawInputStream | None = None
 
     def run(self) -> None:
-        if not os.path.isdir(VOICE_VOSK_MODEL_DIR):
-            self.error_occurred.emit(VOICE_MSG_MODEL_MISSING)
+        if not os.path.isdir(VOICE_VOSK_WAKE_MODEL_DIR):
+            self.error_occurred.emit(f"{VOICE_MSG_MODEL_MISSING} (wake model: {VOICE_VOSK_WAKE_MODEL_DIR})")
+            return
+        if not os.path.isdir(VOICE_VOSK_COMMAND_MODEL_DIR):
+            self.error_occurred.emit(f"{VOICE_MSG_MODEL_MISSING} (command model: {VOICE_VOSK_COMMAND_MODEL_DIR})")
             return
 
         vosk.SetLogLevel(-1)
         try:
-            model = vosk.Model(VOICE_VOSK_MODEL_DIR)
+            wake_model = vosk.Model(VOICE_VOSK_WAKE_MODEL_DIR)
+            command_model = vosk.Model(VOICE_VOSK_COMMAND_MODEL_DIR)
         except Exception as exc:
             self.error_occurred.emit(f"{VOICE_MSG_MODEL_MISSING} ({exc})")
             return
 
         try:
-            self._run_loop(model)
+            self._run_loop(wake_model, command_model)
         finally:
             self._close_stream()
 
-    def _run_loop(self, model: vosk.Model) -> None:
-        wake_rec = self._new_wake_recognizer(model)
+    def _run_loop(self, wake_model: vosk.Model, command_model: vosk.Model) -> None:
+        wake_rec = self._new_wake_recognizer(wake_model)
 
         while not self.isInterruptionRequested():
             if self._paused.is_set():
@@ -84,14 +91,14 @@ class VoiceListener(QThread):
                 self.error_occurred.emit(f"Wake-word engine error: {exc}")
                 continue
 
-            if text.strip().lower() not in VOICE_WAKE_WORDS:
+            if not self._matches_wake_word(text):
                 continue
 
             self._drain_queue()
 
             self.speech_started.emit()
             try:
-                command_text = self._capture_command(model)
+                command_text = self._capture_command(command_model)
             except Exception as exc:
                 command_text = ""
                 self.error_occurred.emit(f"Speech recognition error: {exc}")
@@ -102,16 +109,27 @@ class VoiceListener(QThread):
             else:
                 self.error_occurred.emit(VOICE_MSG_NO_COMMAND_HEARD)
 
-            wake_rec = self._new_wake_recognizer(model)
+            wake_rec = self._new_wake_recognizer(wake_model)
 
-    def _new_wake_recognizer(self, model: vosk.Model) -> vosk.KaldiRecognizer:
-        grammar = json.dumps(list(VOICE_WAKE_WORDS) + ["[unk]"])
-        rec = vosk.KaldiRecognizer(model, VOICE_SAMPLE_RATE_HZ, grammar)
+    def _new_wake_recognizer(self, wake_model: vosk.Model) -> vosk.KaldiRecognizer:
+        rec = vosk.KaldiRecognizer(wake_model, VOICE_SAMPLE_RATE_HZ)
         rec.SetWords(False)
         return rec
 
-    def _capture_command(self, model: vosk.Model) -> str:
-        recognizer = vosk.KaldiRecognizer(model, VOICE_SAMPLE_RATE_HZ)
+    def _matches_wake_word(self, text: str) -> bool:
+        normalized = text.strip().lower()
+        if not normalized:
+            return False
+
+        for phrase in VOICE_WAKE_WORDS:
+            if len(normalized.split()) < len(phrase.split()):
+                continue
+            if fuzz.partial_ratio(phrase, normalized) >= VOICE_WAKE_MATCH_THRESHOLD:
+                return True
+        return False
+
+    def _capture_command(self, command_model: vosk.Model) -> str:
+        recognizer = vosk.KaldiRecognizer(command_model, VOICE_SAMPLE_RATE_HZ)
         recognizer.SetWords(False)
 
         start_time = time.monotonic()
