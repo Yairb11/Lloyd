@@ -111,11 +111,10 @@ class MainWindow(QMainWindow):
         self.voice_listener.speech_started.connect(self._on_speech_started)
         self.voice_listener.speech_ended.connect(self._on_speech_ended)
 
-        #========================================================================================================
-        #self.canvas_panel.mic_toggle_button.toggled.connect(self._on_mic_toggle)
+        self.canvas_panel.mic_toggle_button.setChecked(True)
+        self.canvas_panel.mic_toggle_button.toggled.connect(self._on_mic_toggle)
         self._on_mic_toggle(True)
-        #========================================================================================================
-        
+
         self.voice_listener.start()
 
     def _on_wake_word_detected(self, text: str) -> None:
@@ -129,18 +128,22 @@ class MainWindow(QMainWindow):
 
     def _on_thinking_started(self):
         self.canvas_panel.sphere.enter_thinking()
+        self.voice_listener.suspend()
 
     def _on_thinking_ended(self):
         self.canvas_panel.sphere.enter_idle()
+        self.voice_listener.unsuspend()
 
     def _on_render_success(self, output_mp4_path: str):
         self.video_preview.play_video(output_mp4_path, title=Path(output_mp4_path).stem)
 
     def _on_speaking_started(self):
         self.canvas_panel.sphere.enter_speaking()
+        self.voice_listener.suspend()
 
     def _on_speaking_ended(self):
         self.canvas_panel.sphere.enter_idle()
+        self.voice_listener.unsuspend()
 
     def _on_mic_toggle(self, muted: bool) -> None:
         button = self.canvas_panel.mic_toggle_button

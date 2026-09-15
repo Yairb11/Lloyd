@@ -5,11 +5,18 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "easyocr>=1.7.0",
     "edge-tts>=7.2.8",
     "manim>=0.21.0",
+    "numpy>=1.26.0",
+    "opencv-python>=5.0.0.93",
     "pillow>=12.3.0",
     "pygame>=2.6.1",
     "pyqt6",
     "pyqt6-qt6>=6.11.2",
     "qrcode>=8.2",
+    "sounddevice>=0.4.6",
+    "thefuzz>=0.22.1",
+    "ultralytics>=8.3.0",
+    "vosk>=0.3.45",
 ]
