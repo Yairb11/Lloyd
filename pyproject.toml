@@ -7,7 +7,9 @@ requires-python = ">=3.12"
 dependencies = [
     "edge-tts>=7.2.8",
     "manim>=0.21.0",
+    "pillow>=12.3.0",
     "pygame>=2.6.1",
-    "PyQt6",
+    "pyqt6",
     "pyqt6-qt6>=6.11.2",
+    "qrcode>=8.2",
 ]
