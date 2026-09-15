@@ -7,21 +7,25 @@ from PyQt6.QtCore import QThread, pyqtSignal
 
 from app.config import MANIM_OUTPUT_DIR, MANIM_QUALITY, MANIM_TEMP_DIR_PREFIX, MANIM_VERBOSITY, MANIM_VIDEO_EXTENSION
 from app.helpers.cocktail_animation_scene import CocktailAnimationScene
+from app.threads.cancellable_worker import CancellableWorker
 
-
-class ManimRenderWorker(QThread):
+class ManimRenderWorker(CancellableWorker):
     rendering_finished = pyqtSignal(str)
     rendering_failed = pyqtSignal(str)
 
     def __init__(self, recipe_str: str, parent=None):
         super().__init__(parent)
         self.recipe_str = recipe_str
+        self._temp_media_dir: Path | None = None
 
-    def run(self):
+    def do_work(self):
         try:
             parsed_data = json.loads(self.recipe_str.strip())
         except Exception as exc:
             self.rendering_failed.emit(f"Invalid JSON recipe string: {exc}")
+            return
+
+        if self.is_cancelled():
             return
 
         cocktail_name = parsed_data.get("name", "Cocktail")
@@ -31,10 +35,10 @@ class ManimRenderWorker(QThread):
         output_dir.mkdir(parents=True, exist_ok=True)
         final_mp4 = (output_dir / f"{base_filename}{MANIM_VIDEO_EXTENSION}").resolve()
 
-        temp_media_dir = Path(f"{MANIM_TEMP_DIR_PREFIX}{base_filename}")
-        temp_media_dir.mkdir(parents=True, exist_ok=True)
+        self._temp_media_dir = Path(f"{MANIM_TEMP_DIR_PREFIX}{base_filename}")
+        self._temp_media_dir.mkdir(parents=True, exist_ok=True)
 
-        manim_config.media_dir = str(temp_media_dir)
+        manim_config.media_dir = str(self._temp_media_dir)
         manim_config.output_file = base_filename
         manim_config.preview = False
         manim_config.quality = MANIM_QUALITY
@@ -44,8 +48,10 @@ class ManimRenderWorker(QThread):
             scene = CocktailAnimationScene(parsed_data)
             scene.render()
 
+            if self.is_cancelled():
+                return
 
-            generated_files = list(temp_media_dir.rglob(f"{base_filename}{MANIM_VIDEO_EXTENSION}"))
+            generated_files = list(self._temp_media_dir.rglob(f"{base_filename}{MANIM_VIDEO_EXTENSION}"))
             if not generated_files:
                 self.rendering_failed.emit(f"Render failed: Output file {base_filename}{MANIM_VIDEO_EXTENSION} not found.")
                 return
@@ -55,9 +61,10 @@ class ManimRenderWorker(QThread):
 
         except Exception as exc:
             self.rendering_failed.emit(str(exc))
-        finally:
-            if temp_media_dir.exists():
-                shutil.rmtree(temp_media_dir, ignore_errors=True)
+
+    def cleanup(self) -> None:
+        if self._temp_media_dir is not None and self._temp_media_dir.exists():
+            shutil.rmtree(self._temp_media_dir, ignore_errors=True)
 
     def sanitize_filename(self, name: str) -> str:
         clean_name = re.sub(r"[^\w\s]", "", name)

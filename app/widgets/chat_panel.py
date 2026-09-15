@@ -9,9 +9,11 @@ from app.config import (
     CHAT_PANEL_MIN_WIDTH,
     CHAT_PANEL_SPACING,
     CHAT_SEND_BUTTON_TEXT,
+    CHAT_STOP_BUTTON_TEXT,
     LOG_PREFIX_AGENT,
     OBJECT_NAME_CHAT_HISTORY,
     OBJECT_NAME_CHAT_PANEL,
+    OBJECT_NAME_SEND_BUTTON,
 )
 from app.helpers.text import clean_text_for_speech
 from app.threads import Agent, LloydSpeaker
@@ -21,15 +23,15 @@ from app.widgets.typing_indicator import TypingIndicator
 
 class ChatPanel(QWidget):
     def __init__(
-        self, 
-        on_thinking_started=None, 
-        on_thinking_ended=None, 
-        on_speaking_started=None, 
+        self,
+        on_thinking_started=None,
+        on_thinking_ended=None,
+        on_speaking_started=None,
         on_speaking_ended=None,
         on_render_success=None,
         parent: QWidget | None = None
     ) -> None:
-        
+
         super().__init__(parent)
         self.setObjectName(OBJECT_NAME_CHAT_PANEL)
         self.setMinimumWidth(CHAT_PANEL_MIN_WIDTH)
@@ -40,6 +42,7 @@ class ChatPanel(QWidget):
         self.on_speaking_ended = on_speaking_ended
         self.on_render_success = on_render_success
         self.agent = None
+        self._busy = False
         self.lloyd_speaker = LloydSpeaker(self)
         self.lloyd_speaker.speech_started.connect(self.on_speaking_started)
         self.lloyd_speaker.speech_finished.connect(self.on_speaking_ended)
@@ -70,14 +73,23 @@ class ChatPanel(QWidget):
         input_row.addWidget(self.input)
 
         self.send_button = QPushButton(CHAT_SEND_BUTTON_TEXT, self)
+        self.send_button.setObjectName(OBJECT_NAME_SEND_BUTTON)
         input_row.addWidget(self.send_button)
 
         layout.addLayout(input_row)
 
-        self.send_button.clicked.connect(self._on_send)
+        self.send_button.clicked.connect(self._on_send_button_clicked)
         self.input.returnPressed.connect(self._on_send)
 
+    def _on_send_button_clicked(self) -> None:
+        if self._busy:
+            self._stop_active_request()
+        else:
+            self._on_send()
+
     def _on_send(self) -> None:
+        if self._busy:
+            return
         message = self.input.text().strip()
         if not message:
             return
@@ -86,7 +98,7 @@ class ChatPanel(QWidget):
 
     def submit_message(self, message: str) -> None:
         message = message.strip()
-        if not message:
+        if not message or self._busy:
             return
 
         self._append_bubble(message, is_user=True)
@@ -95,20 +107,46 @@ class ChatPanel(QWidget):
         self.agent.show_reply.connect(self._on_show_reply)
         self.agent.thinking_started.connect(self._on_thinking_started)
         self.agent.thinking_ended.connect(self._on_thinking_ended)
-        self.agent.render_succeeded.connect(self.on_render_success)
+        self.agent.render_succeeded.connect(self._on_render_succeeded)
 
+        self._set_busy(True)
         self.agent.start()
 
-    def _on_agent_error(self, message: str) -> None:    
+    def _stop_active_request(self) -> None:
+        if self.agent is not None:
+            self.agent.stop_active_worker()
+            self.agent = None
+
+        self._hide_typing_indicator()
+        self._set_busy(False)
+        if self.on_thinking_ended is not None:
+            self.on_thinking_ended()
+
+    def _set_busy(self, busy: bool) -> None:
+        self._busy = busy
+        self.send_button.setText(CHAT_STOP_BUTTON_TEXT if busy else CHAT_SEND_BUTTON_TEXT)
+        self.send_button.setProperty("busy", busy)
+        self.send_button.style().unpolish(self.send_button)
+        self.send_button.style().polish(self.send_button)
+        self.input.setEnabled(not busy)
+
+    def _on_agent_error(self, message: str) -> None:
+        if self.sender() is not self.agent:
+            return
         print(f"{LOG_PREFIX_AGENT} {message}")
 
     def _on_thinking_started(self) -> None:
+        if self.sender() is not self.agent:
+            return
         self.on_thinking_started()
         self._show_typing_indicator()
 
     def _on_thinking_ended(self) -> None:
+        if self.sender() is not self.agent:
+            return
         self.on_thinking_ended()
         self._hide_typing_indicator()
+        self._set_busy(False)
 
     def _show_typing_indicator(self) -> None:
         self._typing_indicator = TypingIndicator(self.history_content)
@@ -124,12 +162,19 @@ class ChatPanel(QWidget):
         self._typing_indicator = None
 
     def _on_show_reply(self, reply: str) -> None:
+        if self.sender() is not self.agent:
+            return
         self._append_bubble(str(reply), is_user=False)
 
         speech_text = clean_text_for_speech(str(reply))
         if speech_text:
             self.lloyd_speaker.speak(speech_text)
-        
+
+    def _on_render_succeeded(self, output_mp4_path: str) -> None:
+        if self.sender() is not self.agent:
+            return
+        if self.on_render_success is not None:
+            self.on_render_success(output_mp4_path)
 
     def _append_bubble(self, text: str, is_user: bool) -> None:
         bubble = ChatBubble(text, is_user, self.history_content)

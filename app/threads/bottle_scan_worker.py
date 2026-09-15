@@ -8,6 +8,8 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from thefuzz import fuzz
 from ultralytics import YOLO
 
+from app.threads.cancellable_worker import CancellableWorker
+
 GLOBAL_BAR_BRANDS: Dict[str, List[str]] = {
     "Lagavulin": ["lagavulin", "lagavuli"],
     "Aberlour": ["aberlour", "abunadh", "a'bunadh"],
@@ -74,9 +76,10 @@ OCR_STOPWORDS: Set[str] = {
     "imported", "finest", "original", "blend", "blended"
 }
 
-class BottleScanWorker(QThread):
+class BottleScanWorker(CancellableWorker):
     scan_finished = pyqtSignal(list)
     scan_failed = pyqtSignal(str)
+
     def __init__(self, image_input: str | Path | np.ndarray, yolo_model: str = "yolo11n.pt", gpu: bool = False):
         super().__init__()
         self.image_input = image_input
@@ -151,7 +154,7 @@ class BottleScanWorker(QThread):
                 selected.append(b)
         return selected
 
-    def run(self):
+    def do_work(self):
         try:
             if isinstance(self.image_input, (str, Path)):
                 path = Path(self.image_input)
@@ -167,7 +170,7 @@ class BottleScanWorker(QThread):
             else:
                 self.scan_failed.emit("Invalid input type. Expected Path or np.ndarray.")
                 return
-            
+
             h, w, _ = image.shape
             yolo = YOLO(self.yolo_model)
             ocr = easyocr.Reader(["en"], gpu=self.gpu)
@@ -194,6 +197,8 @@ class BottleScanWorker(QThread):
             bottles_found: List[str] = []
 
             for idx, (x1, y1, x2, y2) in enumerate(clean_boxes, 1):
+                if self.is_cancelled():
+                    return
                 crop = image[y1:y2, x1:x2]
                 processed = self._preprocess_crop(crop)
                 tokens = ocr.readtext(processed, detail=0)

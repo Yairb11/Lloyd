@@ -26,6 +26,8 @@ from app.config import (
     STYLE_BUTTON_PADDING_V,
     STYLE_INPUT_BORDER_RADIUS,
     STYLE_INPUT_PADDING,
+    OBJECT_NAME_SEND_BUTTON,
+    COLOR_STOP_ACTIVE,
 )
 
 
@@ -94,5 +96,13 @@ def build_stylesheet() -> str:
     QPushButton#{OBJECT_NAME_MIC_TOGGLE_BUTTON}:checked {{
         border: {STYLE_BORDER_WIDTH}px solid {COLOR_MIC_ACTIVE};
         color: {COLOR_MIC_ACTIVE};
+    }}
+    QPushButton#{OBJECT_NAME_SEND_BUTTON}[busy="true"] {{
+        background-color: {COLOR_STOP_ACTIVE};
+        border: {STYLE_BORDER_WIDTH}px solid {COLOR_STOP_ACTIVE};
+        color: #ffffff;
+    }}
+    QPushButton#{OBJECT_NAME_SEND_BUTTON}[busy="true"]:hover {{
+        border: {STYLE_BORDER_WIDTH}px solid #ff8080;
     }}
     """

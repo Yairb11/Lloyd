@@ -3,6 +3,7 @@ import time
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from app.threads.bottle_scan_worker import BottleScanWorker
+from app.threads.cancellable_worker import CancellableWorker
 from app.threads.manim_render_worker import ManimRenderWorker
 
 
@@ -13,11 +14,11 @@ class Agent(QThread):
     error_occurred = pyqtSignal(str)
     render_succeeded = pyqtSignal(str)
 
-
     def __init__(self, message: str, parent=None) -> None:
         super().__init__(parent=parent)
         self.message = message
         self._paused = threading.Event()
+        self._child_workers: list[CancellableWorker] = []
         self.manim_worker = None
         self.bottle_worker = None
 
@@ -41,11 +42,19 @@ class Agent(QThread):
             self.show_reply.emit(output_messgae)
         #===========================================================================================================================================================
 
+    def _spawn_child(self, worker: CancellableWorker) -> None:
+        self._child_workers.append(worker)
+
+    def stop_active_worker(self) -> None:
+        for worker in self._child_workers:
+            worker.request_stop()
+
     def scan_from_image_path(self, path: str):
         self.bottle_worker = BottleScanWorker(
             image_input=path,
             gpu=False,
         )
+        self._spawn_child(self.bottle_worker)
         self.bottle_worker.scan_finished.connect(self._on_scan_success)
         self.bottle_worker.scan_failed.connect(self._on_scan_failure)
 
@@ -61,9 +70,9 @@ class Agent(QThread):
         self.thinking_ended.emit()
         self.show_reply.emit(output_messgae)
 
-
     def generate_and_show_from_string(self, recipe_json_string: str):
         self.manim_worker = ManimRenderWorker(recipe_json_string, self)
+        self._spawn_child(self.manim_worker)
         self.manim_worker.rendering_finished.connect(self._on_render_success)
         self.manim_worker.rendering_failed.connect(self._on_render_failure)
 
@@ -80,13 +89,8 @@ class Agent(QThread):
         self.thinking_ended.emit()
         self.show_reply.emit(output_messgae)
 
-
     def pause(self) -> None:
         self._paused.set()
 
     def resume(self) -> None:
         self._paused.clear()
-
-    def stop(self) -> None:
-        self.requestInterruption()
-        self.wait()
