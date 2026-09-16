@@ -43,6 +43,7 @@ class ChatPanel(QWidget):
         self.on_render_success = on_render_success
         self.agent = None
         self._busy = False
+        self._session_id: str | None = None
         self.lloyd_speaker = LloydSpeaker(self)
         self.lloyd_speaker.speech_started.connect(self.on_speaking_started)
         self.lloyd_speaker.speech_finished.connect(self.on_speaking_ended)
@@ -102,12 +103,14 @@ class ChatPanel(QWidget):
             return
 
         self._append_bubble(message, is_user=True)
-        self.agent = Agent(message)
+        self.agent = Agent(message, session_id=self._session_id)
         self.agent.error_occurred.connect(self._on_agent_error)
         self.agent.show_reply.connect(self._on_show_reply)
+        self.agent.show_status.connect(self._on_show_status)
         self.agent.thinking_started.connect(self._on_thinking_started)
         self.agent.thinking_ended.connect(self._on_thinking_ended)
         self.agent.render_succeeded.connect(self._on_render_succeeded)
+        self.agent.session_id_updated.connect(self._on_session_id_updated)
 
         self._set_busy(True)
         self.agent.start()
@@ -169,6 +172,16 @@ class ChatPanel(QWidget):
         speech_text = clean_text_for_speech(str(reply))
         if speech_text:
             self.lloyd_speaker.speak(speech_text)
+
+    def _on_show_status(self, text: str) -> None:
+        if self.sender() is not self.agent:
+            return
+        self._append_bubble(str(text), is_user=False)
+
+    def _on_session_id_updated(self, session_id: str) -> None:
+        if self.sender() is not self.agent:
+            return
+        self._session_id = session_id
 
     def _on_render_succeeded(self, output_mp4_path: str) -> None:
         if self.sender() is not self.agent:

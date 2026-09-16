@@ -293,7 +293,7 @@ ANIM_STRAINED_FILL_OPACITY: float = 0.88
 
 # PHONE SCAN SERVER
 PHONE_SCAN_PORT: int = 8080
-PHONE_SCAN_UPLOAD_DIR: str = "input_scans"
+PHONE_SCAN_UPLOAD_DIR: str = "output"
 PHONE_SCAN_HTML_FILENAME: str = "scan_phone.html"
 PHONE_SCAN_POLL_INTERVAL_S: float = 0.1
 
@@ -328,3 +328,30 @@ PHONE_SCAN_INSTRUCTIONS_TEXT: str = "Scan with phone camera while on the same Wi
 PHONE_SCAN_STATUS_WAITING_TEXT: str = "LATEST SCAN: WAITING FOR PHOTO"
 PHONE_SCAN_PREVIEW_PLACEHOLDER_TEXT: str = "No snapshot received yet"
 PHONE_SCAN_CANCELLED_MESSAGE: str = "Scan cancelled before a photo was received."
+
+# MCP
+MCP_HOST: str = "127.0.0.1"
+MCP_PORT: int = 8931
+MCP_SERVER_NAME: str = "bartender"
+MCP_SERVER_MODULE: str = "app.agent.lloyd_mcp"
+MCP_TRANSPORT: str = "sse"
+MCP_SSE_PATH: str = "/sse"
+MCP_CONFIG_PATH: str = "runtime/mcp_config.json"
+MCP_HEALTHCHECK_TIMEOUT_S: float = 20.0
+MCP_HEALTHCHECK_POLL_INTERVAL_S: float = 0.5
+MCP_HEALTHCHECK_CONNECT_TIMEOUT_S: float = 1.0
+LOG_PREFIX_MCP: str = "[Lloyd MCP]"
+
+# AGENT
+AGENT_CLI_COMMAND: str = "claude"
+AGENT_CLI_TIMEOUT_S: int = 120
+AGENT_OUTPUT_FORMAT: str = "json"
+AGENT_SYSTEM_PROMPT_PATH: str = "prompts/SYSTEM_PROMPT.md"
+AGENT_MCP_TOOL_NAMES: tuple[str, ...] = (
+    "scan", "recipe", "step_by_step", "suggestions", "basic_question", "story",
+)
+AGENT_CLARIFY_OPERATION: str = "clarify"
+AGENT_STEP_BY_STEP_OPERATION: str = "step_by_step"
+AGENT_ERROR_SPEECH: str = "Something went wrong on my end -- would you like to try that again?"
+AGENT_INVALID_RECIPE_SPEECH: str = "I have the recipe, but I couldn't prepare the animation for it."
+AGENT_RENDER_STATUS_TEXT: str = "Render completed"
