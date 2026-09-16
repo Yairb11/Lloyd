@@ -43,10 +43,11 @@ class ChatPanel(QWidget):
         self.on_render_success = on_render_success
         self.agent = None
         self._busy = False
+        self._speaking = False
         self._session_id: str | None = None
         self.lloyd_speaker = LloydSpeaker(self)
-        self.lloyd_speaker.speech_started.connect(self.on_speaking_started)
-        self.lloyd_speaker.speech_finished.connect(self.on_speaking_ended)
+        self.lloyd_speaker.speech_started.connect(self._on_speech_started)
+        self.lloyd_speaker.speech_finished.connect(self._on_speech_finished)
         self._speech_muted = False
         self._typing_indicator: TypingIndicator | None = None
 
@@ -91,7 +92,7 @@ class ChatPanel(QWidget):
             self._on_send()
 
     def _on_send(self) -> None:
-        if self._busy:
+        if self._busy or self._speaking:
             return
         message = self.input.text().strip()
         if not message:
@@ -144,7 +145,23 @@ class ChatPanel(QWidget):
         self.send_button.setProperty("busy", busy)
         self.send_button.style().unpolish(self.send_button)
         self.send_button.style().polish(self.send_button)
-        self.input.setEnabled(not busy)
+        self._refresh_input_locked()
+
+    def _on_speech_started(self) -> None:
+        self._speaking = True
+        self._refresh_input_locked()
+        if self.on_speaking_started is not None:
+            self.on_speaking_started()
+
+    def _on_speech_finished(self) -> None:
+        self._speaking = False
+        self._refresh_input_locked()
+        if self.on_speaking_ended is not None:
+            self.on_speaking_ended()
+
+    def _refresh_input_locked(self) -> None:
+        self.input.setEnabled(not self._busy and not self._speaking)
+        self.send_button.setEnabled(not self._speaking)
 
     def _on_agent_error(self, message: str) -> None:
         if self.sender() is not self.agent:

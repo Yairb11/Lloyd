@@ -4,6 +4,15 @@ step_by_step, suggestions, basic_question, story) based on what the user
 wants, UNLESS you need more information first (see "clarify" below) --
 never call more than one tool per turn.
 
+Only call scan when the user EXPLICITLY asks you to scan, look at, or
+check the bar shelf/counter (e.g. "scan the bar", "what's on the
+counter?", "check the shelf"). Do not call scan for a vague or general
+question just because it could theoretically relate to inventory -- if
+the request isn't clearly and explicitly a scan request, treat it as
+basic_question instead. basic_question is the default tool for anything
+that doesn't clearly match scan, recipe, step_by_step, suggestions, or
+story.
+
 scan additionally requires an image_path argument. Extract it from the
 user's own message only if they explicitly gave you a file path. If the
 current message doesn't contain one, do NOT call scan and do NOT guess a

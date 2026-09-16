@@ -1,5 +1,5 @@
 import json
-import re
+import os
 import shutil
 from pathlib import Path
 from manim import config as manim_config
@@ -7,6 +7,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 
 from app.config import MANIM_OUTPUT_DIR, MANIM_QUALITY, MANIM_TEMP_DIR_PREFIX, MANIM_VERBOSITY, MANIM_VIDEO_EXTENSION
 from app.helpers.cocktail_animation_scene import CocktailAnimationScene
+from app.helpers.text import sanitize_cocktail_filename
 from app.threads.cancellable_worker import CancellableWorker
 
 class ManimRenderWorker(CancellableWorker):
@@ -29,7 +30,7 @@ class ManimRenderWorker(CancellableWorker):
             return
 
         cocktail_name = parsed_data.get("name", "Cocktail")
-        base_filename = self.sanitize_filename(cocktail_name)
+        base_filename = sanitize_cocktail_filename(cocktail_name)
 
         output_dir = Path(MANIM_OUTPUT_DIR)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -56,7 +57,13 @@ class ManimRenderWorker(CancellableWorker):
                 self.rendering_failed.emit(f"Render failed: Output file {base_filename}{MANIM_VIDEO_EXTENSION} not found.")
                 return
 
-            shutil.copy2(generated_files[0], final_mp4)
+            tmp_final = final_mp4.with_name(f"{final_mp4.stem}.tmp{final_mp4.suffix}")
+            try:
+                shutil.copy2(generated_files[0], tmp_final)
+                os.replace(tmp_final, final_mp4)
+            finally:
+                tmp_final.unlink(missing_ok=True)
+
             self.rendering_finished.emit(str(final_mp4))
 
         except Exception as exc:
@@ -65,7 +72,3 @@ class ManimRenderWorker(CancellableWorker):
     def cleanup(self) -> None:
         if self._temp_media_dir is not None and self._temp_media_dir.exists():
             shutil.rmtree(self._temp_media_dir, ignore_errors=True)
-
-    def sanitize_filename(self, name: str) -> str:
-        clean_name = re.sub(r"[^\w\s]", "", name)
-        return "".join(word.capitalize() for word in clean_name.split())

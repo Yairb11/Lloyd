@@ -373,6 +373,9 @@ AGENT_STEP_BY_STEP_OPERATION: str = "step_by_step"
 AGENT_ERROR_SPEECH: str = "Something went wrong on my end -- would you like to try that again?"
 AGENT_INVALID_RECIPE_SPEECH: str = "I have the recipe, but I couldn't prepare the animation for it."
 AGENT_RENDER_STATUS_TEXT: str = "Render completed"
+STEP_BY_STEP_RERENDER_KEYWORDS: tuple[str, ...] = (
+    "rerender", "re-render", "renew", "regenerate", "redo", "recreate",
+)
 
 # STARTUP
 STARTUP_LOADING_TEXT: str = "Loading Lloyd"

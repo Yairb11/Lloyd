@@ -38,3 +38,8 @@ def clean_text_for_speech(text: str) -> str:
 def split_into_sentences(text: str) -> list[str]:
     sentences = re.split(SPEECH_SENTENCE_SPLIT_PATTERN, text.strip())
     return [sentence.strip() for sentence in sentences if sentence.strip()]
+
+
+def sanitize_cocktail_filename(name: str) -> str:
+    clean_name = re.sub(r"[^\w\s]", "", name)
+    return "".join(word.capitalize() for word in clean_name.split())

@@ -138,13 +138,15 @@ def run_mcp_server():
     @mcp.tool()
     def scan(image_path: str) -> dict:
         """Identify which beverages are visible in a photo of the bar shelf.
-        Use when the user asks to scan, check inventory, or find out what's
-        on the shelf. Requires image_path: the absolute path to the photo --
-        this will already be present in the user's own message when scan is
-        the right tool to call (e.g. 'scan the shelf, photo's at
-        /home/me/bar.jpg'). Never invent or guess a path; if the message
-        doesn't contain one, don't call this tool -- explain in your reply
-        that you need an image path instead."""
+        Only use this when the user EXPLICITLY asks to scan, look at, or
+        check the bar shelf/counter (e.g. 'scan the bar', 'what's on the
+        counter?'). Do not use it for general or ambiguous questions --
+        those go to basic_question instead. Requires image_path: the
+        absolute path to the photo -- this will already be present in the
+        user's own message when scan is the right tool to call (e.g. 'scan
+        the shelf, photo's at /home/me/bar.jpg'). Never invent or guess a
+        path; if the message doesn't contain one, don't call this tool --
+        explain in your reply that you need an image path instead."""
         try:
             beverages = analyze_image_base64(image_path)
         except Exception as e:

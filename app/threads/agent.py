@@ -11,7 +11,11 @@ from app.config import (
     AGENT_RENDER_STATUS_TEXT,
     AGENT_STEP_BY_STEP_OPERATION,
     LOG_PREFIX_ERROR,
+    MANIM_OUTPUT_DIR,
+    MANIM_VIDEO_EXTENSION,
+    STEP_BY_STEP_RERENDER_KEYWORDS,
 )
+from app.helpers.text import sanitize_cocktail_filename
 from app.threads.cancellable_worker import CancellableWorker
 from app.threads.manim_render_worker import ManimRenderWorker
 
@@ -89,13 +93,28 @@ class Agent(QThread):
                 self.show_reply.emit(envelope.get("speech") or AGENT_INVALID_RECIPE_SPEECH)
             else:
                 self.show_reply.emit(envelope.get("speech", ""))
-                self.generate_and_show_from_string(json.dumps(data))
+                existing_path = self._existing_render_path(data.get("name", "Cocktail"))
+                if existing_path is not None and not self._wants_rerender(self.message):
+                    self.thinking_ended.emit()
+                    self.show_status.emit(AGENT_RENDER_STATUS_TEXT)
+                    self.render_succeeded.emit(str(existing_path))
+                else:
+                    self.generate_and_show_from_string(json.dumps(data))
         else:
             self.thinking_ended.emit()
             self.show_reply.emit(envelope.get("speech", ""))
 
         if current_session_id:
             self.session_id_updated.emit(current_session_id)
+
+    def _existing_render_path(self, cocktail_name: str) -> Path | None:
+        filename = sanitize_cocktail_filename(cocktail_name)
+        path = (Path(MANIM_OUTPUT_DIR) / f"{filename}{MANIM_VIDEO_EXTENSION}").resolve()
+        return path if path.is_file() else None
+
+    def _wants_rerender(self, message: str) -> bool:
+        lowered = message.lower()
+        return any(keyword in lowered for keyword in STEP_BY_STEP_RERENDER_KEYWORDS)
 
     def _spawn_child(self, worker: CancellableWorker) -> None:
         self._child_workers.append(worker)
