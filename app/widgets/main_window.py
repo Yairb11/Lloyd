@@ -61,6 +61,7 @@ class MainWindow(QMainWindow):
             on_thinking_ended=self._on_thinking_ended,
             on_speaking_started=self._on_speaking_started,
             on_speaking_ended=self._on_speaking_ended,
+            on_speaking_amplitude=self._on_speaking_amplitude,
             on_render_success=self._on_render_success,
             on_recipe_ready=self._on_recipe_ready,
             parent=self.splitter
@@ -170,6 +171,9 @@ class MainWindow(QMainWindow):
     def _on_thinking_ended(self):
         self.canvas_panel.sphere.enter_idle()
         self.voice_listener.unsuspend()
+        
+    def _on_speaking_amplitude(self, level: float) -> None:
+        self.canvas_panel.sphere.update_speaking_amplitude(level)
 
     def _on_render_success(self, output_mp4_path: str):
         self.video_preview.play_video(output_mp4_path, title=Path(output_mp4_path).stem)

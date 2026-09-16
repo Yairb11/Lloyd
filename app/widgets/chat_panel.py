@@ -28,6 +28,7 @@ class ChatPanel(QWidget):
         on_thinking_ended=None,
         on_speaking_started=None,
         on_speaking_ended=None,
+        on_speaking_amplitude=None,
         on_render_success=None,
         on_recipe_ready=None,
         parent: QWidget | None = None
@@ -41,6 +42,7 @@ class ChatPanel(QWidget):
         self.on_thinking_ended = on_thinking_ended
         self.on_speaking_started = on_speaking_started
         self.on_speaking_ended = on_speaking_ended
+        self.on_speaking_amplitude = on_speaking_amplitude
         self.on_render_success = on_render_success
         self.on_recipe_ready = on_recipe_ready
         self.agent = None
@@ -50,6 +52,7 @@ class ChatPanel(QWidget):
         self.lloyd_speaker = LloydSpeaker(self)
         self.lloyd_speaker.speech_started.connect(self._on_speech_started)
         self.lloyd_speaker.speech_finished.connect(self._on_speech_finished)
+        self.lloyd_speaker.amplitude_changed.connect(self._on_speaking_amplitude)
         self._speech_muted = False
         self._typing_indicator: TypingIndicator | None = None
 
@@ -161,6 +164,10 @@ class ChatPanel(QWidget):
         self._refresh_input_locked()
         if self.on_speaking_ended is not None:
             self.on_speaking_ended()
+
+    def _on_speaking_amplitude(self, level: float) -> None:
+        if self.on_speaking_amplitude is not None:
+            self.on_speaking_amplitude(level)
 
     def _refresh_input_locked(self) -> None:
         self.input.setEnabled(not self._busy and not self._speaking)

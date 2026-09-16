@@ -1,5 +1,4 @@
 import math
-import random
 from PyQt6.QtCore import Qt, QEasingCurve, QPropertyAnimation, QTimer, pyqtProperty
 from PyQt6.QtGui import QColor, QPainter, QPaintEvent, QRadialGradient
 from PyQt6.QtWidgets import QWidget
@@ -28,11 +27,10 @@ from app.config import (
     SPHERE_ORBIT_HIGHLIGHT_LIGHTEN,
     SPHERE_PULSE_AMPLITUDE,
     SPHERE_PULSE_SPEED,
-    SPHERE_SPEAKING_JITTER_DURATION_MS,
-    SPHERE_SPEAKING_JITTER_MAX_INTERVAL_S,
-    SPHERE_SPEAKING_JITTER_MIN_INTERVAL_S,
-    SPHERE_SPEAKING_MAX_JITTER,
-    SPHERE_SPEAKING_MIN_JITTER,
+    SPHERE_SPEAKING_AMPLITUDE_GROWTH,
+    SPHERE_SPEAKING_IDLE_BREATH_AMPLITUDE,
+    SPHERE_SPEAKING_SMOOTHING_FALL,
+    SPHERE_SPEAKING_SMOOTHING_RISE,
     SPHERE_THINKING_ORBIT_DOT_RADIUS,
     SPHERE_THINKING_ORBIT_RADIUS_RATIO,
     SPHERE_THINKING_ORBIT_SPEED,
@@ -42,7 +40,6 @@ from app.config import (
 )
 
 ColorLike = QColor | str | Qt.GlobalColor
-
 
 class SphereMode:
     IDLE = "idle"
@@ -69,8 +66,8 @@ class SphereWidget(QWidget):
 
         self._orbit_angle: float = 0.0
 
-        self._speaking_timer_accum: float = 0.0
-        self._speaking_next_jitter_at: float = 0.0
+        self._speaking_amplitude_target: float = 0.0
+        self._speaking_amplitude_smoothed: float = 0.0
 
         self._radius_animation = QPropertyAnimation(self, b"baseRadius", self)
         self._radius_animation.setDuration(SPHERE_GROW_SHRINK_DURATION_MS)
@@ -127,6 +124,8 @@ class SphereWidget(QWidget):
         self._mode = SphereMode.IDLE
         self._pulse_speed = SPHERE_PULSE_SPEED
         self._pulse_amplitude = SPHERE_PULSE_AMPLITUDE
+        self._speaking_amplitude_target = 0.0
+        self._speaking_amplitude_smoothed = 0.0
         self.release_color()
         self._animate_radius_to(SPHERE_BASE_RADIUS)
 
@@ -147,8 +146,14 @@ class SphereWidget(QWidget):
     def enter_speaking(self) -> None:
         self._mode = SphereMode.SPEAKING
         self.set_color(SPHERE_COLOR_SPEAKING)
-        self._speaking_timer_accum = 0.0
-        self._speaking_next_jitter_at = 0.0
+        self._speaking_amplitude_target = 0.0
+        self._speaking_amplitude_smoothed = 0.0
+        self._animate_radius_to(SPHERE_BASE_RADIUS)
+
+    def update_speaking_amplitude(self, level: float) -> None:
+        if self._mode != SphereMode.SPEAKING:
+            return
+        self._speaking_amplitude_target = max(0.0, min(1.0, level))
 
     def _animate_radius_to(self, target: float, duration_ms: int | None = None) -> None:
         self._radius_animation.stop()
@@ -171,18 +176,11 @@ class SphereWidget(QWidget):
             self._orbit_angle = (self._orbit_angle + SPHERE_THINKING_ORBIT_SPEED * step) % 360
 
         if self._mode == SphereMode.SPEAKING:
-            self._speaking_timer_accum += step
-            if self._speaking_timer_accum >= self._speaking_next_jitter_at:
-                jitter = random.uniform(SPHERE_SPEAKING_MIN_JITTER, SPHERE_SPEAKING_MAX_JITTER)
-                sign = random.choice((-1.0, 1.0))
-                target = SPHERE_BASE_RADIUS + sign * jitter
-                target = max(SPHERE_MIN_RADIUS, min(target, SPHERE_MAX_RADIUS))
-                self._animate_radius_to(target, duration_ms=SPHERE_SPEAKING_JITTER_DURATION_MS)
-                self._speaking_timer_accum = 0.0
-                self._speaking_next_jitter_at = random.uniform(
-                    SPHERE_SPEAKING_JITTER_MIN_INTERVAL_S,
-                    SPHERE_SPEAKING_JITTER_MAX_INTERVAL_S,
-                )
+            rising = self._speaking_amplitude_target > self._speaking_amplitude_smoothed
+            rate = SPHERE_SPEAKING_SMOOTHING_RISE if rising else SPHERE_SPEAKING_SMOOTHING_FALL
+            self._speaking_amplitude_smoothed += (
+                self._speaking_amplitude_target - self._speaking_amplitude_smoothed
+            ) * rate
 
         self.update()
 
@@ -190,8 +188,13 @@ class SphereWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        pulse = math.sin(self._phase) * self._pulse_amplitude
-        radius = max(self._base_radius + pulse, SPHERE_MIN_RENDER_RADIUS)
+        if self._mode == SphereMode.SPEAKING:
+            offset = SPHERE_SPEAKING_IDLE_BREATH_AMPLITUDE * math.sin(self._phase)
+            offset += self._speaking_amplitude_smoothed * SPHERE_SPEAKING_AMPLITUDE_GROWTH
+        else:
+            offset = math.sin(self._phase) * self._pulse_amplitude
+
+        radius = max(self._base_radius + offset, SPHERE_MIN_RENDER_RADIUS)
 
         center_x = self.width() / 2
         center_y = self.height() / 2
