@@ -73,6 +73,12 @@ class MainWindow(QMainWindow):
         self._restore_settings()
         self._setup_voice_listener()
 
+        self.canvas_panel.mic_toggle_button.setChecked(True)
+        self.canvas_panel.mic_toggle_button.toggled.connect(self._on_mic_toggle)
+        self._on_mic_toggle(True)
+
+        self.canvas_panel.mute_button.toggled.connect(self._on_mute_toggle)
+
         self.video_preview = TopLeftVideoWidget(self, width=VIDEO_PREVIEW_DEFAULT_WIDTH, height=VIDEO_PREVIEW_DEFAULT_HEIGHT)
         self.video_preview.move(VIDEO_PREVIEW_POSITION_OFFSET, VIDEO_PREVIEW_POSITION_OFFSET)
         self.video_preview.hide()
@@ -156,6 +162,9 @@ class MainWindow(QMainWindow):
 
     def _on_voice_error(self, message: str) -> None:
         print(f"{LOG_PREFIX_VOICE} {message}")
+
+    def _on_mute_toggle(self, checked: bool) -> None:
+        self.chat_panel.set_speech_muted(checked)
 
     def toggle_fullscreen(self) -> None:
         if self._is_fullscreen:

@@ -12,6 +12,7 @@ from app.config import (
     SPEECH_NUMBER_RANGE_REPLACEMENT,
     SPEECH_OZ_PATTERN,
     SPEECH_OZ_REPLACEMENT,
+    SPEECH_SENTENCE_SPLIT_PATTERN,
     SPEECH_STRIP_EMOJI_PATTERN,
     SPEECH_STRIP_MARKDOWN_PATTERN,
 )
@@ -32,3 +33,8 @@ def clean_text_for_speech(text: str) -> str:
     text = re.sub(SPEECH_CELSIUS_PATTERN, SPEECH_CELSIUS_REPLACEMENT, text)
 
     return text.strip()
+
+
+def split_into_sentences(text: str) -> list[str]:
+    sentences = re.split(SPEECH_SENTENCE_SPLIT_PATTERN, text.strip())
+    return [sentence.strip() for sentence in sentences if sentence.strip()]

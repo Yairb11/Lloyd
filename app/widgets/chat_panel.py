@@ -47,6 +47,7 @@ class ChatPanel(QWidget):
         self.lloyd_speaker = LloydSpeaker(self)
         self.lloyd_speaker.speech_started.connect(self.on_speaking_started)
         self.lloyd_speaker.speech_finished.connect(self.on_speaking_ended)
+        self._speech_muted = False
         self._typing_indicator: TypingIndicator | None = None
 
         layout = QVBoxLayout(self)
@@ -64,6 +65,7 @@ class ChatPanel(QWidget):
         self.history_scroll.setWidgetResizable(True)
         self.history_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.history_scroll.setWidget(self.history_content)
+        self.history_scroll.verticalScrollBar().rangeChanged.connect(self._on_history_range_changed)
         layout.addWidget(self.history_scroll)
 
         input_row = QHBoxLayout()
@@ -125,6 +127,11 @@ class ChatPanel(QWidget):
         if self.on_thinking_ended is not None:
             self.on_thinking_ended()
 
+    def set_speech_muted(self, muted: bool) -> None:
+        self._speech_muted = muted
+        if muted:
+            self.lloyd_speaker.stop()
+
     def shutdown(self) -> None:
         if self.agent is not None:
             self.agent.shutdown()
@@ -175,6 +182,9 @@ class ChatPanel(QWidget):
             return
         self._append_bubble(str(reply), is_user=False)
 
+        if self._speech_muted:
+            return
+
         speech_text = clean_text_for_speech(str(reply))
         if speech_text:
             self.lloyd_speaker.speak(speech_text)
@@ -203,3 +213,6 @@ class ChatPanel(QWidget):
     def _scroll_to_bottom(self) -> None:
         scrollbar = self.history_scroll.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
+
+    def _on_history_range_changed(self, minimum: int, maximum: int) -> None:
+        self.history_scroll.verticalScrollBar().setValue(maximum)
