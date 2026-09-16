@@ -1,7 +1,9 @@
+import itertools
 import json
 import socket
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -17,9 +19,13 @@ from app.config import (
     MCP_SERVER_MODULE,
     MCP_SERVER_NAME,
     MCP_SSE_PATH,
+    STARTUP_LOADING_INTERVAL_S,
+    STARTUP_LOADING_TEXT,
 )
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+_mcp_process: subprocess.Popen | None = None
 
 
 def _is_mcp_server_reachable() -> bool:
@@ -41,7 +47,8 @@ def _write_mcp_config() -> None:
 
 
 def _launch_mcp_server() -> None:
-    subprocess.Popen(
+    global _mcp_process
+    _mcp_process = subprocess.Popen(
         [sys.executable, "-m", MCP_SERVER_MODULE],
         creationflags=subprocess.CREATE_NEW_CONSOLE,
         cwd=str(_PROJECT_ROOT),
@@ -57,13 +64,57 @@ def _wait_for_mcp_server() -> bool:
     return False
 
 
+def shutdown_mcp_server() -> None:
+    """Terminate the MCP server subprocess if this process launched it."""
+    global _mcp_process
+    if _mcp_process is not None and _mcp_process.poll() is None:
+        _mcp_process.terminate()
+        try:
+            _mcp_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            _mcp_process.kill()
+    _mcp_process = None
+
+
+class _LoadingIndicator:
+    def __init__(self, text: str = STARTUP_LOADING_TEXT, interval_s: float = STARTUP_LOADING_INTERVAL_S) -> None:
+        self._text = text
+        self._interval_s = interval_s
+        self._stop_event = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop_event.set()
+        self._thread.join()
+        sys.stdout.write("\r" + " " * (len(self._text) + 4) + "\r")
+        sys.stdout.flush()
+
+    def _run(self) -> None:
+        for dots in itertools.cycle(["", ".", "..", "..."]):
+            if self._stop_event.is_set():
+                return
+            sys.stdout.write(f"\r{self._text}{dots}   ")
+            sys.stdout.flush()
+            self._stop_event.wait(self._interval_s)
+
+
 def setup() -> None:
-    _write_mcp_config()
+    indicator = _LoadingIndicator()
+    indicator.start()
+    try:
+        _write_mcp_config()
 
-    if not _is_mcp_server_reachable():
-        _launch_mcp_server()
+        if not _is_mcp_server_reachable():
+            _launch_mcp_server()
 
-    if not _wait_for_mcp_server():
+        server_ready = _wait_for_mcp_server()
+    finally:
+        indicator.stop()
+
+    if not server_ready:
         print(f"{LOG_PREFIX_ERROR} MCP server did not come up within {MCP_HEALTHCHECK_TIMEOUT_S}s on {MCP_HOST}:{MCP_PORT}")
         raise RuntimeError(f"MCP server did not start on {MCP_HOST}:{MCP_PORT}")
 

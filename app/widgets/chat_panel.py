@@ -125,6 +125,12 @@ class ChatPanel(QWidget):
         if self.on_thinking_ended is not None:
             self.on_thinking_ended()
 
+    def shutdown(self) -> None:
+        if self.agent is not None:
+            self.agent.shutdown()
+            self.agent = None
+        self.lloyd_speaker.stop()
+
     def _set_busy(self, busy: bool) -> None:
         self._busy = busy
         self.send_button.setText(CHAT_STOP_BUTTON_TEXT if busy else CHAT_SEND_BUTTON_TEXT)

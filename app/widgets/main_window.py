@@ -173,6 +173,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self.voice_listener.stop()
+        self.chat_panel.shutdown()
 
         settings = QSettings(ORG_NAME, APP_NAME)
         settings.setValue(SETTINGS_GEOMETRY_KEY, self.saveGeometry())

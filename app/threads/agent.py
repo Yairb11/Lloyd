@@ -12,7 +12,6 @@ from app.config import (
     AGENT_STEP_BY_STEP_OPERATION,
     LOG_PREFIX_ERROR,
 )
-from app.threads.bottle_scan_worker import BottleScanWorker
 from app.threads.cancellable_worker import CancellableWorker
 from app.threads.manim_render_worker import ManimRenderWorker
 
@@ -35,7 +34,6 @@ class Agent(QThread):
         self._paused = threading.Event()
         self._child_workers: list[CancellableWorker] = []
         self.manim_worker = None
-        self.bottle_worker = None
         self._scan_popup = None
         self._scan_result_path: str | None = None
         self._active_scan_path: str | None = None
@@ -106,6 +104,11 @@ class Agent(QThread):
         for worker in self._child_workers:
             worker.request_stop()
 
+    def shutdown(self) -> None:
+        self.stop_active_worker()
+        if self._scan_popup is not None:
+            self._scan_popup.close()
+
     def scan_image(self) -> None:
         done_event = threading.Event()
         self._scan_result_path = None
@@ -124,19 +127,6 @@ class Agent(QThread):
             return
         self._scan_popup.show()
 
-    def scan_from_image_path(self, path: str):
-        self._active_scan_path = path
-        self.bottle_worker = BottleScanWorker(
-            image_input=path,
-            gpu=False,
-        )
-        self._spawn_child(self.bottle_worker)
-        self.bottle_worker.scan_finished.connect(self._on_scan_success)
-        self.bottle_worker.scan_failed.connect(self._on_scan_failure)
-        self.bottle_worker.finished.connect(self._cleanup_scan_file)
-
-        self.bottle_worker.start()
-
     def _cleanup_scan_file(self) -> None:
         path = self._active_scan_path
         self._active_scan_path = None
@@ -146,11 +136,6 @@ class Agent(QThread):
             Path(path).unlink(missing_ok=True)
         except OSError as exc:
             print(f"{LOG_PREFIX_ERROR}: could not delete uploaded scan {path}: {exc}")
-
-    def _on_scan_success(self, output: list):
-        output_messgae = f"Bottles: {','.join(output)}"
-        self.thinking_ended.emit()
-        self.show_reply.emit(output_messgae)
 
     def _on_scan_failure(self, error_msg: str):
         output_messgae = f"Scanning failed: {error_msg}"
