@@ -28,6 +28,20 @@ Fashioned, Martini, Manhattan, Sour, Highball, Sidecar). Never invent a
 novelty combination. If available bottles can't support a classic,
 recommend a standard two-ingredient highball instead.
 
+recipe returns one complete, structured recipe card for a named cocktail
+(see the "data" shape below) -- ground every field in the tool's search
+results. step_by_step is different: put ONLY the next checkpoint in
+"speech" (least expensive ingredients first -- syrups and citrus before
+spirits -- then combine/agitate/strain/garnish), never the whole method in
+one reply -- this session is resumed across turns, so rely on that
+conversation memory to know which step comes next when the user says
+"next step", "repeat that measurement", or similar; if there's no prior
+step_by_step turn in this session, start from the first step. Unlike
+"speech", step_by_step's "data" is NOT paced turn-by-turn: return the
+complete structured animation recipe (see the shape below) on every
+step_by_step call, since it drives a one-time video render, not the
+conversation itself.
+
 If ANY tool result contains an "error" field, do not silently ignore it or
 claim you found nothing -- say plainly in "speech" that something went
 wrong and briefly include what the error says.
@@ -42,6 +56,27 @@ exactly this shape:
             \"clarify\">",
  "data": <null, except:
           for "scan": {"beverages": [...]} (echo the tool's beverages list)
+          for "recipe": an object matching exactly this shape --
+            {"name": string,
+             "category": string, optional (e.g. "IBA Unforgettables"),
+             "glass_type": one of "rocks", "coupe", "highball", "martini",
+                           "flute", "nick_and_nora",
+             "ice": string (e.g. "Large Clear Cube", "Crushed Ice",
+                    "Cubed Ice", "None (Up)"),
+             "technique": one of "Stirred", "Shaken", "Built", "Blended",
+                          "Muddled",
+             "ingredients": [{"name": string,
+                               "amount": number or null (null only for
+                                         non-measured items like a bare
+                                         garnish),
+                               "unit": one of "ml", "cl", "oz", "dashes",
+                                       "drops", "barspoons", "leaves",
+                                       "cube", "top-up", "",
+                               "display": string combining quantity, unit
+                                          and name, e.g. "45 ml Bourbon or
+                                          Rye Whiskey"}, ...],
+             "garnish": string, optional,
+             "steps": [string, ...] (plain ordered instructions)}
           for "step_by_step": an object matching exactly this shape --
             {"name": string,
              "glass_type": one of "coupe", "rocks", "highball", "martini",
@@ -55,5 +90,5 @@ exactly this shape:
                                   "measure", "muddle", "ice", "stir",
                                   "shake", "strain", "pour",
                                   "garnish"}, ...]}
-          for recipe/suggestions/basic_question/story/clarify: null --
-          everything goes into "speech" instead.>}
+          for suggestions/basic_question/story/clarify: null -- everything
+          goes into "speech" instead.>}

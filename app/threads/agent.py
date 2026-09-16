@@ -8,8 +8,12 @@ from app.config import (
     AGENT_CLARIFY_OPERATION,
     AGENT_ERROR_SPEECH,
     AGENT_INVALID_RECIPE_SPEECH,
+    AGENT_INVALID_STEP_BY_STEP_SPEECH,
+    AGENT_RECIPE_OPERATION,
+    AGENT_RECIPE_REQUIRED_KEYS,
     AGENT_RENDER_STATUS_TEXT,
     AGENT_STEP_BY_STEP_OPERATION,
+    AGENT_STEP_BY_STEP_REQUIRED_KEYS,
     LOG_PREFIX_ERROR,
     MANIM_OUTPUT_DIR,
     MANIM_VIDEO_EXTENSION,
@@ -19,7 +23,6 @@ from app.helpers.text import sanitize_cocktail_filename
 from app.threads.cancellable_worker import CancellableWorker
 from app.threads.manim_render_worker import ManimRenderWorker
 
-
 class Agent(QThread):
     thinking_started = pyqtSignal()
     thinking_ended = pyqtSignal()
@@ -27,6 +30,7 @@ class Agent(QThread):
     show_status = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
     render_succeeded = pyqtSignal(str)
+    recipe_ready = pyqtSignal(dict)
     session_id_updated = pyqtSignal(str)
 
     _popup_requested = pyqtSignal(object)
@@ -86,11 +90,20 @@ class Agent(QThread):
 
         operation = envelope.get("operation")
 
-        if operation == AGENT_STEP_BY_STEP_OPERATION:
+        if operation == AGENT_RECIPE_OPERATION:
             data = envelope.get("data")
-            if not isinstance(data, dict) or not all(k in data for k in ("name", "glass_type", "ingredients", "steps")):
+            if not isinstance(data, dict) or not all(k in data for k in AGENT_RECIPE_REQUIRED_KEYS):
                 self.thinking_ended.emit()
                 self.show_reply.emit(envelope.get("speech") or AGENT_INVALID_RECIPE_SPEECH)
+            else:
+                self.thinking_ended.emit()
+                self.show_reply.emit(envelope.get("speech", ""))
+                self.recipe_ready.emit(data)
+        elif operation == AGENT_STEP_BY_STEP_OPERATION:
+            data = envelope.get("data")
+            if not isinstance(data, dict) or not all(k in data for k in AGENT_STEP_BY_STEP_REQUIRED_KEYS):
+                self.thinking_ended.emit()
+                self.show_reply.emit(envelope.get("speech") or AGENT_INVALID_STEP_BY_STEP_SPEECH)
             else:
                 self.show_reply.emit(envelope.get("speech", ""))
                 existing_path = self._existing_render_path(data.get("name", "Cocktail"))

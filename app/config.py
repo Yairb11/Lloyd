@@ -50,12 +50,34 @@ COLOR_CLOSE_BUTTON_TEXT: str = "#FFFFFF"
 COLOR_CLOSE_BUTTON_BG: str = "#C62828"
 COLOR_CLOSE_BUTTON_HOVER_BG: str = "#E53935"
 
+COLOR_RECIPE_BG: str = "#1a1a24"
+COLOR_RECIPE_BORDER: str = "#00E5FF"
+COLOR_RECIPE_TITLE: str = "#ffffff"
+COLOR_RECIPE_CLOSE_TEXT: str = "#ffffff"
+COLOR_RECIPE_CLOSE_BG: str = "#28283a"
+COLOR_RECIPE_CLOSE_HOVER_BG: str = "#e63946"
+COLOR_RECIPE_BADGE_BG: str = "#262638"
+COLOR_RECIPE_INGREDIENTS_BG: str = "#212130"
+COLOR_RECIPE_INGREDIENT_NAME: str = "#dcdce6"
+COLOR_RECIPE_INGREDIENT_VALUE: str = "#e0a96d"
+COLOR_RECIPE_STEP_BADGE_BG: str = "#3b3b54"
+COLOR_RECIPE_STEP_TEXT: str = "#cccccc"
+COLOR_RECIPE_GARNISH_TEXT: str = "#9a9ab0"
+
 # FONTS
 FONT_FAMILY: str = "Segoe UI Variable, Segoe UI"
 FONT_SIZE_NORMAL: int = 10
 FONT_SIZE_SMALL: int = 9
 FONT_SIZE_VIDEO_TITLE: int = 11
 FONT_SIZE_CLOSE_BUTTON: int = 9
+
+FONT_SIZE_RECIPE_TITLE: int = 22
+FONT_SIZE_RECIPE_CLOSE_BUTTON: int = 9
+FONT_SIZE_RECIPE_BADGE: int = 10
+FONT_SIZE_RECIPE_INGREDIENT: int = 12
+FONT_SIZE_RECIPE_STEP: int = 12
+FONT_SIZE_RECIPE_STEP_BADGE: int = 11
+FONT_SIZE_RECIPE_GARNISH: int = 11
 
 # THEME
 STYLE_BORDER_WIDTH: int = 1
@@ -166,6 +188,23 @@ VIDEO_DEFAULT_TITLE: str = "ANIMATION PREVIEW"
 VIDEO_TITLE_MAX_LENGTH: int = 30
 VIDEO_CLOSE_GLYPH: str = "✕"
 
+# RECIPE POPUP
+RECIPE_POPUP_DEFAULT_WIDTH: int = 380
+RECIPE_POPUP_DEFAULT_HEIGHT: int = 420
+RECIPE_POPUP_POSITION_OFFSET: int = 25
+RECIPE_POPUP_BORDER_MARGIN: int = 8
+RECIPE_POPUP_MIN_WIDTH: int = 280
+RECIPE_POPUP_MIN_HEIGHT: int = 220
+RECIPE_POPUP_HEADER_HEIGHT: int = 22
+RECIPE_POPUP_BORDER_WIDTH: int = 2
+RECIPE_POPUP_BORDER_RADIUS: int = 8
+RECIPE_POPUP_CLOSE_BUTTON_SIZE: int = 16
+RECIPE_POPUP_CLOSE_BUTTON_RADIUS: int = 8
+RECIPE_POPUP_CLOSE_GLYPH: str = "✕"
+RECIPE_POPUP_STEP_BADGE_SIZE: int = 22
+RECIPE_POPUP_DEFAULT_TITLE: str = "RECIPE"
+RECIPE_POPUP_TITLE_MAX_LENGTH: int = 30
+
 # MIC BUTTON
 MIC_BUTTON_LISTENING_TEXT: str = "Mic: Listening"
 MIC_BUTTON_MUTED_TEXT: str = "Mic: Muted"
@@ -178,6 +217,7 @@ OBJECT_NAME_USER_BUBBLE: str = "userBubble"
 OBJECT_NAME_AGENT_BUBBLE: str = "agentBubble"
 OBJECT_NAME_MIC_TOGGLE_BUTTON: str = "micToggleButton"
 OBJECT_NAME_VIDEO_WIDGET: str = "TopLeftVideoWidget"
+OBJECT_NAME_RECIPE_WIDGET: str = "TopRightRecipyWidget"
 
 # LOGGING
 LOG_PREFIX_VOICE: str = "[Lloyd voice]"
@@ -370,11 +410,19 @@ AGENT_MCP_TOOL_NAMES: tuple[str, ...] = (
 )
 AGENT_CLARIFY_OPERATION: str = "clarify"
 AGENT_STEP_BY_STEP_OPERATION: str = "step_by_step"
+AGENT_STEP_BY_STEP_REQUIRED_KEYS: tuple[str, ...] = (
+    "name", "glass_type", "ingredients", "steps",
+)
+AGENT_INVALID_STEP_BY_STEP_SPEECH: str = "I have the recipe, but I couldn't prepare the animation for it."
 AGENT_ERROR_SPEECH: str = "Something went wrong on my end -- would you like to try that again?"
-AGENT_INVALID_RECIPE_SPEECH: str = "I have the recipe, but I couldn't prepare the animation for it."
+AGENT_INVALID_RECIPE_SPEECH: str = "I have the recipe, but couldn't prepare the display card for it."
 AGENT_RENDER_STATUS_TEXT: str = "Render completed"
 STEP_BY_STEP_RERENDER_KEYWORDS: tuple[str, ...] = (
     "rerender", "re-render", "renew", "regenerate", "redo", "recreate",
+)
+AGENT_RECIPE_OPERATION: str = "recipe"
+AGENT_RECIPE_REQUIRED_KEYS: tuple[str, ...] = (
+    "name", "glass_type", "ice", "technique", "ingredients", "steps",
 )
 
 # STARTUP

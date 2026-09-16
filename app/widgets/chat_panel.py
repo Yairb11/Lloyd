@@ -29,6 +29,7 @@ class ChatPanel(QWidget):
         on_speaking_started=None,
         on_speaking_ended=None,
         on_render_success=None,
+        on_recipe_ready=None,
         parent: QWidget | None = None
     ) -> None:
 
@@ -41,6 +42,7 @@ class ChatPanel(QWidget):
         self.on_speaking_started = on_speaking_started
         self.on_speaking_ended = on_speaking_ended
         self.on_render_success = on_render_success
+        self.on_recipe_ready = on_recipe_ready
         self.agent = None
         self._busy = False
         self._speaking = False
@@ -113,6 +115,7 @@ class ChatPanel(QWidget):
         self.agent.thinking_started.connect(self._on_thinking_started)
         self.agent.thinking_ended.connect(self._on_thinking_ended)
         self.agent.render_succeeded.connect(self._on_render_succeeded)
+        self.agent.recipe_ready.connect(self._on_recipe_ready)
         self.agent.session_id_updated.connect(self._on_session_id_updated)
 
         self._set_busy(True)
@@ -221,6 +224,12 @@ class ChatPanel(QWidget):
             return
         if self.on_render_success is not None:
             self.on_render_success(output_mp4_path)
+
+    def _on_recipe_ready(self, data: dict) -> None:
+        if self.sender() is not self.agent:
+            return
+        if self.on_recipe_ready is not None:
+            self.on_recipe_ready(data)
 
     def _append_bubble(self, text: str, is_user: bool) -> None:
         bubble = ChatBubble(text, is_user, self.history_content)

@@ -1,5 +1,5 @@
 from pathlib import Path
-from PyQt6.QtCore import QByteArray, QSettings, Qt
+from PyQt6.QtCore import QByteArray, QPoint, QSettings, Qt
 from PyQt6.QtGui import QCloseEvent, QKeySequence, QShortcut, QShowEvent
 from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QSplitter, QWidget
 
@@ -11,6 +11,9 @@ from app.config import (
     MIC_BUTTON_LISTENING_TEXT,
     MIC_BUTTON_MUTED_TEXT,
     ORG_NAME,
+    RECIPE_POPUP_DEFAULT_HEIGHT,
+    RECIPE_POPUP_DEFAULT_WIDTH,
+    RECIPE_POPUP_POSITION_OFFSET,
     SETTINGS_GEOMETRY_KEY,
     SETTINGS_SPLITTER_STATE_KEY,
     SPLITTER_DEFAULT_CANVAS_RATIO,
@@ -30,6 +33,7 @@ from app.threads import VoiceListener
 from app.widgets.canvas_panel import CanvasPanel
 from app.widgets.chat_panel import ChatPanel
 from app.widgets.top_left_video_widget import TopLeftVideoWidget
+from app.widgets.top_right_recipes_widget import TopRightRecipyWidget
 from app.win_dark_mode import enable_dark_titlebar
 
 
@@ -58,12 +62,14 @@ class MainWindow(QMainWindow):
             on_speaking_started=self._on_speaking_started,
             on_speaking_ended=self._on_speaking_ended,
             on_render_success=self._on_render_success,
+            on_recipe_ready=self._on_recipe_ready,
             parent=self.splitter
         )
         self.splitter.addWidget(self.canvas_panel)
         self.splitter.addWidget(self.chat_panel)
         self.splitter.setStretchFactor(0, SPLITTER_STRETCH_CANVAS)
         self.splitter.setStretchFactor(1, SPLITTER_STRETCH_CHAT)
+        self.splitter.splitterMoved.connect(self._on_splitter_moved)
 
         layout.addWidget(self.splitter)
 
@@ -83,14 +89,39 @@ class MainWindow(QMainWindow):
         self.video_preview.move(VIDEO_PREVIEW_POSITION_OFFSET, VIDEO_PREVIEW_POSITION_OFFSET)
         self.video_preview.hide()
 
+        self.recipe_widget = TopRightRecipyWidget(self, width=RECIPE_POPUP_DEFAULT_WIDTH, height=RECIPE_POPUP_DEFAULT_HEIGHT)
+        self.recipe_widget.hide()
+        self._reposition_recipe_widget()
+        self._raise_hud_widgets()
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.video_preview.move(VIDEO_PREVIEW_POSITION_OFFSET, VIDEO_PREVIEW_POSITION_OFFSET)
+        self._reposition_recipe_widget()
+        self._raise_hud_widgets()
+
+    def _on_splitter_moved(self, pos: int, index: int) -> None:
+        self._reposition_recipe_widget()
+        self._raise_hud_widgets()
+
+    def _reposition_recipe_widget(self) -> None:
+        x_in_canvas = self.canvas_panel.width() - self.recipe_widget.width() - RECIPE_POPUP_POSITION_OFFSET
+        top_right = self.canvas_panel.mapTo(self, QPoint(x_in_canvas, RECIPE_POPUP_POSITION_OFFSET))
+        self.recipe_widget.move(top_right)
+
+    def _raise_hud_widgets(self) -> None:
+        self.recipe_widget.raise_()
         self.video_preview.raise_()
 
     def _setup_shortcuts(self) -> None:
         QShortcut(QKeySequence(FULLSCREEN_SHORTCUT_F11), self, activated=self.toggle_fullscreen)
-        QShortcut(QKeySequence(FULLSCREEN_SHORTCUT_ESC), self, activated=self.toggle_fullscreen)
+        QShortcut(QKeySequence(FULLSCREEN_SHORTCUT_ESC), self, activated=self._on_escape_pressed)
+
+    def _on_escape_pressed(self) -> None:
+        if self.recipe_widget.isVisible():
+            self.recipe_widget.hide()
+            return
+        self.toggle_fullscreen()
 
     def _restore_settings(self) -> None:
         settings = QSettings(ORG_NAME, APP_NAME)
@@ -142,6 +173,12 @@ class MainWindow(QMainWindow):
 
     def _on_render_success(self, output_mp4_path: str):
         self.video_preview.play_video(output_mp4_path, title=Path(output_mp4_path).stem)
+        self._raise_hud_widgets()
+
+    def _on_recipe_ready(self, data: dict):
+        self.recipe_widget.show_recipe(data)
+        self._reposition_recipe_widget()
+        self._raise_hud_widgets()
 
     def _on_speaking_started(self):
         self.canvas_panel.sphere.enter_speaking()
@@ -183,6 +220,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:
         self.voice_listener.stop()
         self.chat_panel.shutdown()
+        self.recipe_widget.shutdown()
 
         settings = QSettings(ORG_NAME, APP_NAME)
         settings.setValue(SETTINGS_GEOMETRY_KEY, self.saveGeometry())
