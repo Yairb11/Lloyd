@@ -4,8 +4,10 @@ import threading
 from pathlib import Path
 from datetime import datetime
 from PyQt6.QtCore import QThread, pyqtSignal
+from jsonschema import ValidationError, validate
 
 from app.agent import ask_bartender
+from app.agent.step_by_step_schema import STEP_BY_STEP_SCHEMA
 from app.config import (
     AGENT_CLARIFY_OPERATION,
     AGENT_ERROR_SPEECH,
@@ -16,7 +18,6 @@ from app.config import (
     AGENT_RENDER_STARTED_TEXT,
     AGENT_RENDER_STATUS_TEXT,
     AGENT_STEP_BY_STEP_OPERATION,
-    AGENT_STEP_BY_STEP_REQUIRED_KEYS,
     LOG_PREFIX_ERROR,
     MANIM_OUTPUT_DIR,
     MANIM_VIDEO_EXTENSION,
@@ -124,7 +125,7 @@ class Agent(QThread):
                 self.recipe_ready.emit(data)
         elif operation == AGENT_STEP_BY_STEP_OPERATION:
             data = envelope.get("data")
-            if not isinstance(data, dict) or not all(k in data for k in AGENT_STEP_BY_STEP_REQUIRED_KEYS):
+            if not isinstance(data, dict) or not self._is_valid_step_by_step(data):
                 self.thinking_ended.emit()
                 self.show_reply.emit(envelope.get("speech") or AGENT_INVALID_STEP_BY_STEP_SPEECH)
             else:
@@ -146,6 +147,13 @@ class Agent(QThread):
 
         if current_session_id:
             self.session_id_updated.emit(current_session_id)
+
+    def _is_valid_step_by_step(self, data: dict) -> bool:
+        try:
+            validate(instance=data, schema=STEP_BY_STEP_SCHEMA)
+        except ValidationError:
+            return False
+        return True
 
     def _on_cli_process_started(self, proc: subprocess.Popen) -> None:
         self._cli_process = proc

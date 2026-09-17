@@ -1,559 +1,830 @@
-import textwrap
+import numpy as np
 from manim import (
     AnnularSector,
-    Arc,
-    BLUE_B,
+    BLUE_A,
     BOLD,
+    Circle,
     Create,
     CubicBezier,
-    DL,
-    DOWN,
     Dot,
+    DOWN,
     Ellipse,
     FadeIn,
     FadeOut,
-    GREY_A,
-    GREY_B,
-    GrowFromEdge,
-    LaggedStart,
+    GOLD,
     LEFT,
     LIGHT_GRAY,
     Line,
-    linear,
-    Mobject,
-    ORIGIN,
+    MoveAlongPath,
+    ParametricFunction,
     PI,
-    Polygon,
-    Rectangle,
+    ReplacementTransform,
     RIGHT,
     RoundedRectangle,
     Scene,
     Square,
     Text,
-    Transform,
     Triangle,
     UL,
     UP,
     VGroup,
+    VMobject,
     WHITE,
+    Wiggle,
     YELLOW,
+    linear,
 )
 
 from app.config import (
-    ANIM_ACCENT_STROKE_WIDTH,
-    ANIM_BARSPOON_ORBIT_X,
-    ANIM_COLOR_BITTERS_DEFAULT,
-    ANIM_COLOR_BOURBON,
-    ANIM_COLOR_CAMPARI,
+    ANIM_CHILL_FADE_TARGET_OPACITY,
+    ANIM_CHILL_FROST_STROKE_OPACITY,
+    ANIM_CHILL_FROST_STROKE_WIDTH,
+    ANIM_COLOR_DEFAULT_GARNISH,
+    ANIM_COLOR_DEFAULT_INGREDIENT,
     ANIM_COLOR_DEFAULT_LIQUID,
-    ANIM_COLOR_GARNISH_LEAF_1,
-    ANIM_COLOR_GARNISH_LEAF_2,
-    ANIM_COLOR_HERB_DEFAULT,
-    ANIM_COLOR_MINT_LEAF_1,
-    ANIM_COLOR_MINT_LEAF_2,
-    ANIM_COLOR_MINT_LEAF_3,
-    ANIM_COLOR_MUDDLE_PASTE,
-    ANIM_COLOR_ORANGE_TWIST,
-    ANIM_COLOR_SUGAR_CUBE,
+    ANIM_COLOR_DEFAULT_MUDDLE_BLEND,
+    ANIM_COLOR_DEFAULT_SHAKE_BLEND,
+    ANIM_COLOR_DEFAULT_STIR_BLEND,
+    ANIM_COLOR_DEFAULT_STRAIN,
+    ANIM_COLOR_FOAM,
+    ANIM_COLOR_ICE,
+    ANIM_COLOR_MUDDLER_WOOD_DARK,
+    ANIM_COLOR_MUDDLER_WOOD_DARKEST,
+    ANIM_COLOR_MUDDLER_WOOD_LIGHT,
+    ANIM_COLOR_MUDDLER_WOOD_MEDIUM,
+    ANIM_COLOR_SPOON_INNER,
+    ANIM_COLOR_SPOON_KNOB,
+    ANIM_COLOR_SPOON_KNOB_STROKE,
+    ANIM_COLOR_SPOON_METAL_DARK,
+    ANIM_COLOR_SPOON_METAL_LIGHT,
     ANIM_DEFAULT_STEP_WAIT_S,
     ANIM_FINAL_WAIT_S,
-    ANIM_GLASS_STROKE_WIDTH,
-    ANIM_ICE_FILL_OPACITY_LARGE,
-    ANIM_ICE_FILL_OPACITY_MEDIUM,
-    ANIM_ICE_FILL_OPACITY_SMALL,
-    ANIM_ICE_LARGE_SIDE,
-    ANIM_ICE_MEDIUM_SIDE,
-    ANIM_ICE_SMALL_SIDE,
-    ANIM_ICE_STROKE_WIDTH_MEDIUM,
-    ANIM_ICE_STROKE_WIDTH_THIN,
-    ANIM_INFO_BOX_BUFF,
-    ANIM_INFO_BOX_ROW_BUFF,
+    ANIM_GARNISH_DASH_BUFF,
+    ANIM_GARNISH_DASH_RADIUS,
+    ANIM_GARNISH_DEFAULT_SHAPE,
+    ANIM_GARNISH_FADE_RUN_TIME,
+    ANIM_GARNISH_FOAM_HEIGHT,
+    ANIM_GARNISH_FOAM_OPACITY,
+    ANIM_GARNISH_FOAM_WIDTH_RATIO,
+    ANIM_GARNISH_HALF_CIRCLE_INNER_RADIUS,
+    ANIM_GARNISH_HALF_CIRCLE_OUTER_RADIUS,
+    ANIM_GARNISH_LEAF_HEIGHT,
+    ANIM_GARNISH_LEAF_WIDTH,
+    ANIM_GARNISH_SIDE_OFFSET,
+    ANIM_GARNISH_STROKE_WIDTH,
+    ANIM_GARNISH_SURFACE_Y_OFFSET,
+    ANIM_GARNISH_TRIANGLE_SCALE,
+    ANIM_GARNISH_Z_INDEX,
+    ANIM_ICE_CUBE_CORNER_RADIUS,
+    ANIM_ICE_CUBE_COUNT_PREP,
+    ANIM_ICE_CUBE_COUNT_SERVING,
+    ANIM_ICE_CUBE_FILL_OPACITY,
+    ANIM_ICE_CUBE_HEIGHT_DELTA,
+    ANIM_ICE_CUBE_SIZE,
+    ANIM_ICE_CUBE_X_SPACING,
+    ANIM_ICE_CUBE_Y_OFFSET,
+    ANIM_ICE_LARGE_FILL_OPACITY,
+    ANIM_ICE_LARGE_HEIGHT_DELTA,
+    ANIM_ICE_LARGE_Y_OFFSET,
+    ANIM_ICE_ROCK_CORNER_RADIUS,
+    ANIM_ICE_ROCK_SIZE,
+    ANIM_ICE_SPHERE_RADIUS,
+    ANIM_ICE_STROKE_WIDTH,
+    ANIM_INGREDIENT_COMPACT_THRESHOLD,
     ANIM_INGREDIENT_DOT_RADIUS,
-    ANIM_INGREDIENT_FADE_LAG_RATIO,
-    ANIM_INGREDIENT_FONT_SIZE,
+    ANIM_INGREDIENT_ENTRY_BUFF,
+    ANIM_INGREDIENT_FONT_SIZE_COMPACT,
+    ANIM_INGREDIENT_FONT_SIZE_NORMAL,
+    ANIM_INGREDIENT_LIST_BUFF_COMPACT,
+    ANIM_INGREDIENT_LIST_BUFF_NORMAL,
     ANIM_INGREDIENT_PANEL_BUFF,
-    ANIM_INGREDIENT_ROW_BUFF,
-    ANIM_LAYER_FILL_OPACITY,
-    ANIM_MUDDLER_CORNER_RADIUS,
-    ANIM_MUDDLER_HEIGHT,
-    ANIM_MUDDLER_WIDTH,
-    ANIM_SHAKEN_FILL_OPACITY,
-    ANIM_SHAKER_CORNER_RADIUS,
-    ANIM_SHAKER_HEIGHT,
-    ANIM_SHAKER_WIDTH,
+    ANIM_ML_TO_HEIGHT_SCALE,
+    ANIM_MEASURE_DASH_HEIGHT_SCALE,
+    ANIM_MEASURE_DEFAULT_AMOUNT_ML,
+    ANIM_MEASURE_FALLBACK_THICKNESS,
+    ANIM_MEASURE_MAX_FILL_MARGIN,
+    ANIM_MEASURE_MIN_AVAILABLE_HEIGHT,
+    ANIM_MEASURE_STREAM_START_OFFSET,
+    ANIM_MEASURE_STREAM_STROKE_WIDTH_LIQUID,
+    ANIM_MEASURE_STREAM_STROKE_WIDTH_OTHER,
+    ANIM_MEASURE_STREAM_Z_INDEX,
+    ANIM_MEASURE_TOP_MARGIN,
+    ANIM_MEASURE_TOP_MIN_THICKNESS,
+    ANIM_MUDDLE_MIN_HEIGHT,
+    ANIM_MUDDLER_HANDLE_CORNER_RADIUS,
+    ANIM_MUDDLER_HANDLE_HEIGHT_PADDING,
+    ANIM_MUDDLER_HANDLE_MIN_HEIGHT,
+    ANIM_MUDDLER_HANDLE_WIDTH,
+    ANIM_MUDDLER_HEAD_CORNER_RADIUS,
+    ANIM_MUDDLER_HEAD_HEIGHT,
+    ANIM_MUDDLER_HEAD_WIDTH,
+    ANIM_MUDDLER_POMMEL_RADIUS,
+    ANIM_MUDDLER_STROKE_WIDTH,
+    ANIM_SHAKE_WIGGLE_COUNT,
+    ANIM_SHAKE_WIGGLE_ROTATION,
+    ANIM_SHAKE_WIGGLE_RUN_TIME,
+    ANIM_SOLID_HEIGHT_DELTA,
+    ANIM_SOLID_LEAF_FILL_OPACITY,
+    ANIM_SOLID_LEAF_HEIGHT,
+    ANIM_SOLID_LEAF_WIDTH,
+    ANIM_SOLID_SQUARE_FILL_OPACITY,
+    ANIM_SOLID_SQUARE_SIDE,
+    ANIM_SOLID_STROKE_WIDTH,
+    ANIM_SOLID_Y_OFFSET,
+    ANIM_SOLIDS_Z_INDEX,
+    ANIM_SPOON_BOWL_HEIGHT,
+    ANIM_SPOON_BOWL_WIDTH,
+    ANIM_SPOON_INNER_HEIGHT,
+    ANIM_SPOON_INNER_OPACITY,
+    ANIM_SPOON_INNER_WIDTH,
+    ANIM_SPOON_KNOB_RADIUS,
+    ANIM_SPOON_SPIRAL_COUNT,
+    ANIM_SPOON_SPIRAL_MARGIN,
+    ANIM_SPOON_SPIRAL_X_OFFSET,
+    ANIM_SPOON_SPIRAL_Y_STEP,
+    ANIM_SPOON_STEM_HEIGHT_PADDING,
+    ANIM_SPOON_STEM_STROKE_WIDTH,
+    ANIM_SPOON_STROKE_WIDTH,
+    ANIM_STEP_DESC_BUFF,
     ANIM_STEP_DESC_FONT_SIZE,
     ANIM_STEP_DESC_LINE_SPACING,
-    ANIM_STEP_DESC_MAX_HEIGHT,
-    ANIM_STEP_TEXT_WRAP_WIDTH,
     ANIM_STEP_TITLE_FONT_SIZE,
-    ANIM_STIRRED_FILL_OPACITY,
-    ANIM_STRAIN_ARC_STROKE_WIDTH,
-    ANIM_STRAINED_FILL_OPACITY,
-    ANIM_SUGAR_CUBE_SIDE,
-    ANIM_SUGAR_CUBE_STROKE_WIDTH,
+    ANIM_STEP_TITLE_Y,
+    ANIM_STEP_TRANSFORM_RUN_TIME,
+    ANIM_STEP_WRAP_WORDS_PER_LINE,
+    ANIM_STIR_ORBIT_ANGLE_PI_MULTIPLIER,
+    ANIM_STIR_ORBIT_RADIUS_RATIO,
+    ANIM_STIR_ORBIT_RUN_TIME,
+    ANIM_STIR_ORBIT_RY,
+    ANIM_STIR_ORBIT_Y_OFFSET,
+    ANIM_STIR_SOLIDS_ROTATE,
+    ANIM_STRAIN_FOAM_MIN_LIQUID_THICKNESS,
+    ANIM_STRAIN_FOAM_THICKNESS,
+    ANIM_STRAIN_FOAM_Z_INDEX,
+    ANIM_STRAIN_POUR_STROKE_WIDTH,
+    ANIM_STRAIN_RIM_MARGIN,
+    ANIM_STRAIN_TILT_ANGLE,
+    ANIM_STRAIN_TILT_BACK_RUN_TIME,
+    ANIM_STRAIN_TILT_RUN_TIME,
+    ANIM_STRAIN_TRANSFER_RUN_TIME,
     ANIM_TITLE_BUFF,
     ANIM_TITLE_FONT_SIZE,
+    ANIM_TOOL_Z_INDEX,
+    ANIM_VESSEL_CREATE_RUN_TIME,
+    ANIM_VESSEL_PAIR_X_OFFSET,
+    ANIM_VESSEL_Y_OFFSET,
 )
+from app.helpers.cocktail_vessel import Container, VesselState
+from app.helpers.color_utils import hex_to_rgb, rgb_to_hex
 
 
 class CocktailAnimationScene(Scene):
-    def __init__(self, recipe_data):
-        super().__init__()
-        self.recipe_data = recipe_data
-
-    def create_glass(self, glass_type: str) -> tuple[VGroup, Mobject]:
-        g = glass_type.lower()
-        base_y = -2.2
-
-        if g in ("rocks", "old_fashioned", "lowball"):
-            outline = Polygon(
-                [-0.85, 0.2, 0],
-                [-0.7, base_y, 0],
-                [0.7, base_y, 0],
-                [0.85, 0.2, 0],
-                color=WHITE,
-                stroke_width=ANIM_GLASS_STROKE_WIDTH,
-            )
-            fill_shape = Polygon(
-                [-0.8, -0.1, 0],
-                [-0.68, base_y + 0.05, 0],
-                [0.68, base_y + 0.05, 0],
-                [0.8, -0.1, 0],
-                stroke_width=0,
-            )
-            return VGroup(outline), fill_shape
-
-        elif g in ("highball", "collins"):
-            h = 3.2 if g == "collins" else 2.8
-            w = 1.15 if g == "collins" else 1.25
-            outline = RoundedRectangle(
-                corner_radius=0.1, height=h, width=w, color=WHITE, stroke_width=ANIM_GLASS_STROKE_WIDTH
-            ).move_to([0, base_y + h / 2, 0])
-            fill_shape = Rectangle(
-                height=h - 0.5, width=w - 0.1, stroke_width=0
-            ).align_to(outline, DOWN).shift(UP * 0.05)
-            return VGroup(outline), fill_shape
-
-        elif g == "martini":
-            rim_y = 0.3
-            stem_top_y = -0.9
-            stem = Line([0, stem_top_y, 0], [0, base_y, 0], stroke_width=ANIM_GLASS_STROKE_WIDTH, color=WHITE)
-            foot = Line([-0.7, base_y, 0], [0.7, base_y, 0], stroke_width=ANIM_GLASS_STROKE_WIDTH, color=WHITE)
-            cone = Polygon(
-                [-1.15, rim_y, 0],
-                [0, stem_top_y, 0],
-                [1.15, rim_y, 0],
-                color=WHITE,
-                stroke_width=ANIM_GLASS_STROKE_WIDTH,
-            )
-            fill_shape = Polygon(
-                [-0.98, rim_y - 0.15, 0],
-                [0, stem_top_y + 0.05, 0],
-                [0.98, rim_y - 0.15, 0],
-                stroke_width=0,
-            )
-            return VGroup(cone, stem, foot), fill_shape
-
-        elif g == "flute":
-            bowl_h = 2.2
-            bowl_w = 0.75
-            rim_y = 0.4
-            stem_top_y = rim_y - bowl_h
-            bowl = RoundedRectangle(
-                corner_radius=0.3, height=bowl_h, width=bowl_w, color=WHITE, stroke_width=ANIM_GLASS_STROKE_WIDTH
-            ).move_to([0, rim_y - bowl_h / 2, 0])
-            stem = Line([0, stem_top_y, 0], [0, base_y, 0], stroke_width=ANIM_GLASS_STROKE_WIDTH, color=WHITE)
-            foot = Line([-0.55, base_y, 0], [0.55, base_y, 0], stroke_width=ANIM_GLASS_STROKE_WIDTH, color=WHITE)
-            fill_shape = RoundedRectangle(
-                corner_radius=0.25, height=bowl_h - 0.4, width=bowl_w - 0.1, stroke_width=0
-            ).align_to(bowl, DOWN).shift(UP * 0.05)
-            return VGroup(bowl, stem, foot), fill_shape
-
-        elif g == "nick_and_nora":
-            rim_y = 0.3
-            r = 0.85
-            stem_top_y = rim_y - r
-            bowl = Arc(
-                radius=r, start_angle=PI, angle=PI, stroke_width=ANIM_GLASS_STROKE_WIDTH, color=WHITE, arc_center=[0, rim_y, 0]
-            )
-            stem = Line([0, stem_top_y, 0], [0, base_y, 0], stroke_width=ANIM_GLASS_STROKE_WIDTH, color=WHITE)
-            foot = Line([-0.6, base_y, 0], [0.6, base_y, 0], stroke_width=ANIM_GLASS_STROKE_WIDTH, color=WHITE)
-            fill_shape = AnnularSector(
-                inner_radius=0, outer_radius=r - 0.07, start_angle=PI, angle=PI, stroke_width=0, arc_center=[0, rim_y - 0.06, 0]
-            )
-            return VGroup(bowl, stem, foot), fill_shape
-
-        else:
-            rim_y = 0.3
-            r = 1.05
-            stem_top_y = rim_y - r
-            bowl = Arc(
-                radius=r, start_angle=PI, angle=PI, stroke_width=ANIM_GLASS_STROKE_WIDTH, color=WHITE, arc_center=[0, rim_y, 0]
-            )
-            stem = Line([0, stem_top_y, 0], [0, base_y, 0], stroke_width=ANIM_GLASS_STROKE_WIDTH, color=WHITE)
-            foot = Line([-0.7, base_y, 0], [0.7, base_y, 0], stroke_width=ANIM_GLASS_STROKE_WIDTH, color=WHITE)
-            fill_shape = AnnularSector(
-                inner_radius=0, outer_radius=r - 0.07, start_angle=PI, angle=PI, stroke_width=0, arc_center=[0, rim_y - 0.08, 0]
-            )
-            return VGroup(bowl, stem, foot), fill_shape
-
-    def get_layer_shape(self, glass_type: str, y_bottom: float, y_top: float, width_max: float, color: str, opacity: float = 0.9) -> Mobject:
-        g = glass_type.lower()
-        if g in ("rocks", "old_fashioned", "lowball"):
-            def w_at(y: float) -> float:
-                t = (y - (-2.2)) / (0.2 - (-2.2))
-                return 1.34 + t * (1.64 - 1.34) - 0.08
-            wb = w_at(y_bottom) / 2
-            wt = w_at(y_top) / 2
-            return Polygon(
-                [-wt, y_top, 0],
-                [-wb, y_bottom, 0],
-                [wb, y_bottom, 0],
-                [wt, y_top, 0],
-                fill_color=color,
-                fill_opacity=opacity,
-                stroke_width=0,
-            )
-        else:
-            h = max(y_top - y_bottom, 0.05)
-            return Rectangle(
-                width=width_max,
-                height=h,
-                fill_color=color,
-                fill_opacity=opacity,
-                stroke_width=0,
-            ).move_to([0, (y_bottom + y_top) / 2, 0])
+    def __init__(self, recipe_data=None, **kwargs):
+        super().__init__(**kwargs)
+        self.recipe_data = recipe_data or {}
 
     def construct(self):
-        data = self.recipe_data
-        ingredients = data.get("ingredients", [])
-        steps = data.get("steps", [])
-        glass_type = data.get("glass_type", "coupe").lower()
+        cocktail_name = self.recipe_data.get("name", "Cocktail")
+        ingredients = self.recipe_data.get("ingredients", [])
+        steps = self.recipe_data.get("steps", [])
+        serving_glass_type = self.recipe_data.get("glass_type", "rocks")
+        build_in_glass = self.recipe_data.get("build_in_serving_glass", False)
+        has_foam = self.recipe_data.get("has_foam", False)
 
-        is_built_in_glass = not any(s.get("action", "").lower() == "strain" for s in steps)
-
-        if any("basil" in i["name"].lower() or "mint" in i["name"].lower() for i in ingredients):
-            final_color = ANIM_COLOR_HERB_DEFAULT
-        elif any("campari" in i["name"].lower() for i in ingredients):
-            final_color = ANIM_COLOR_CAMPARI
-        elif any("bourbon" in i["name"].lower() or "whiskey" in i["name"].lower() or "rye" in i["name"].lower() for i in ingredients):
-            final_color = ANIM_COLOR_BOURBON
-        else:
-            final_color = ingredients[1]["color"] if len(ingredients) > 1 else ANIM_COLOR_DEFAULT_LIQUID
-
-        title = Text(data.get("name", "Cocktail"), font_size=ANIM_TITLE_FONT_SIZE, weight=BOLD).to_edge(UP, buff=ANIM_TITLE_BUFF)
-        self.play(FadeIn(title, shift=DOWN * 0.2))
-
-        panel = VGroup()
+        # Map lookup
+        ing_lookup = {}
         for ing in ingredients:
-            dot = Dot(color=ing.get("color", "#FFFFFF"), radius=ANIM_INGREDIENT_DOT_RADIUS)
-            lbl = Text(f"{ing.get('amount', '')} {ing.get('name', '')}", font_size=ANIM_INGREDIENT_FONT_SIZE)
-            panel.add(VGroup(dot, lbl).arrange(RIGHT, buff=ANIM_INGREDIENT_ROW_BUFF))
+            ing_id = ing.get("id")
+            ing_name = ing.get("name")
+            color = ing.get("color_hex") or ing.get("color") or ANIM_COLOR_DEFAULT_INGREDIENT
+            itype = ing.get("type", "liquid").lower()
+            data = {"id": ing_id, "name": ing_name, "color": color, "type": itype}
+            if ing_id:
+                ing_lookup[ing_id] = data
+            if ing_name:
+                ing_lookup[ing_name] = data
 
-        panel.arrange(DOWN, aligned_edge=LEFT, buff=ANIM_INGREDIENT_ROW_BUFF).to_corner(UL, buff=ANIM_INGREDIENT_PANEL_BUFF).shift(DOWN * 0.2)
-        self.play(LaggedStart(*[FadeIn(p, shift=RIGHT * 0.2) for p in panel], lag_ratio=ANIM_INGREDIENT_FADE_LAG_RATIO))
+        # Check vessel requirements
+        needs_shaker = False
+        needs_mixing_glass = False
 
-        glass_group, glass_fill = self.create_glass(glass_type)
+        if not build_in_glass:
+            for step in steps:
+                act = step.get("action", {})
+                target = act.get("target", "")
+                act_name = act.get("name", "")
+                if target == "shaker" or act_name == "shake":
+                    needs_shaker = True
+                elif target == "mixing_glass" or (act_name == "stir" and target != "serving_glass"):
+                    needs_mixing_glass = True
 
-        if is_built_in_glass:
-            glass_group.move_to([3.0, -1.0, 0])
-            glass_fill.move_to([3.0, -1.0, 0])
-            active_vessel = glass_group
-            vessel_x = 3.0
-            vessel_bottom = -2.15
-            vessel_top_y = glass_group.get_top()[1]
-            vessel_w = 1.35 if glass_type in ("rocks", "highball", "collins") else 1.6
-            self.play(Create(glass_group))
+        # Header Title
+        title = Text(cocktail_name, font_size=ANIM_TITLE_FONT_SIZE, weight=BOLD, color=GOLD).to_edge(UP, buff=ANIM_TITLE_BUFF)
+        self.play(FadeIn(title, shift=DOWN * 0.3), run_time=0.5)
+
+        # Ingredients List with portions
+        ing_vgroup = VGroup()
+        for ing in ingredients:
+            dot_col = ing.get("color_hex") or ing.get("color") or WHITE
+            dot = Dot(radius=ANIM_INGREDIENT_DOT_RADIUS, color=dot_col)
+
+            name = ing.get("name", "")
+            amt = ing.get("amount")
+            unit = ing.get("unit", "")
+
+            if amt is not None:
+                if isinstance(amt, (int, float)):
+                    if unit == "ml":
+                        amt_str = f"{amt}ml"
+                    elif unit == "dash":
+                        amt_str = f"{amt} dash" if amt == 1 else f"{amt} dashes"
+                    elif unit == "count":
+                        amt_str = f"{amt}"
+                    elif unit:
+                        amt_str = f"{amt} {unit}"
+                    else:
+                        amt_str = f"{amt}"
+                else:
+                    amt_str = str(amt)
+                label_text = f"{name} - {amt_str}"
+            else:
+                label_text = name
+
+            lbl = Text(
+                label_text,
+                font_size=ANIM_INGREDIENT_FONT_SIZE_COMPACT if len(ingredients) > ANIM_INGREDIENT_COMPACT_THRESHOLD else ANIM_INGREDIENT_FONT_SIZE_NORMAL,
+                color=LIGHT_GRAY,
+            )
+            entry = VGroup(dot, lbl).arrange(RIGHT, buff=ANIM_INGREDIENT_ENTRY_BUFF)
+            ing_vgroup.add(entry)
+
+        if len(ing_vgroup) > 0:
+            ing_vgroup.arrange(
+                DOWN,
+                aligned_edge=LEFT,
+                buff=ANIM_INGREDIENT_LIST_BUFF_COMPACT if len(ingredients) > ANIM_INGREDIENT_COMPACT_THRESHOLD else ANIM_INGREDIENT_LIST_BUFF_NORMAL,
+            )
+            ing_vgroup.to_corner(UL, buff=ANIM_INGREDIENT_PANEL_BUFF)
+            self.play(FadeIn(ing_vgroup, shift=RIGHT * 0.3), run_time=0.6)
+
+        # Vessel instantiation
+        vessels = {}
+        on_screen_vessels = set()
+
+        if build_in_glass:
+            serving_glass = Container(serving_glass_type, label="Serving Glass").move_to(DOWN * ANIM_VESSEL_Y_OFFSET)
+            vessels["serving_glass"] = VesselState(serving_glass)
+            active_target = "serving_glass"
         else:
-            shaker = RoundedRectangle(
-                corner_radius=ANIM_SHAKER_CORNER_RADIUS, height=ANIM_SHAKER_HEIGHT, width=ANIM_SHAKER_WIDTH, color=LIGHT_GRAY, stroke_width=ANIM_GLASS_STROKE_WIDTH
-            ).move_to([1.8, -0.4, 0])
-            glass_group.shift(RIGHT * 4.9)
-            glass_fill.shift(RIGHT * 4.9)
-            active_vessel = shaker
-            vessel_x = 1.8
-            vessel_bottom = shaker.get_bottom()[1] + 0.08
-            vessel_top_y = shaker.get_top()[1]
-            vessel_w = 1.65
-            self.play(Create(shaker), Create(glass_group))
+            prep_type = "shaker" if needs_shaker else "mixing_glass"
+            prep_label = "Shaker" if needs_shaker else "Mixing Glass"
+            prep_container = Container(prep_type, label=prep_label).move_to(
+                LEFT * ANIM_VESSEL_PAIR_X_OFFSET + DOWN * ANIM_VESSEL_Y_OFFSET
+            )
+            serving_container = Container(serving_glass_type, label="Serving Glass").move_to(
+                RIGHT * ANIM_VESSEL_PAIR_X_OFFSET + DOWN * ANIM_VESSEL_Y_OFFSET
+            )
 
-        current_fill_y = vessel_bottom
-        liquid_layers = VGroup()
-        added_ingredients = set()
-        info_box = VGroup()
-        sugar_cube_mobj = None
+            vessels["prep"] = VesselState(prep_container)
+            vessels["serving_glass"] = VesselState(serving_container)
+            active_target = "prep"
 
+        def ensure_vessel_visible(state):
+            if state.container not in on_screen_vessels:
+                self.play(Create(state.container), run_time=ANIM_VESSEL_CREATE_RUN_TIME)
+                on_screen_vessels.add(state.container)
+
+        step_title_mobj = VMobject()
+        step_inst_mobj = VMobject()
+        already_strained = False
+
+        # Step Processing
         for step in steps:
-            self.remove(info_box)
+            raw_title = step.get("title", "")
+            raw_inst = step.get("instruction", "")
 
-            s_title = Text(step.get("title", ""), font_size=ANIM_STEP_TITLE_FONT_SIZE, weight=BOLD, color=YELLOW)
-            raw_instruction = step.get("instruction", "")
-            wrapped_text = "\n".join(textwrap.wrap(raw_instruction, width=ANIM_STEP_TEXT_WRAP_WIDTH))
-            s_desc = Text(wrapped_text, font_size=ANIM_STEP_DESC_FONT_SIZE, line_spacing=ANIM_STEP_DESC_LINE_SPACING, color=WHITE)
+            words = raw_inst.split(" ")
+            fmt_inst = ""
+            for i, w in enumerate(words):
+                fmt_inst += w + " "
+                if (i + 1) % ANIM_STEP_WRAP_WORDS_PER_LINE == 0 and i != len(words) - 1:
+                    fmt_inst += "\n"
 
-            if s_desc.height > ANIM_STEP_DESC_MAX_HEIGHT:
-                s_desc.set_height(ANIM_STEP_DESC_MAX_HEIGHT)
+            new_title = Text(raw_title, font_size=ANIM_STEP_TITLE_FONT_SIZE, weight=BOLD, color=YELLOW).move_to(UP * ANIM_STEP_TITLE_Y)
+            new_inst = Text(fmt_inst.strip(), font_size=ANIM_STEP_DESC_FONT_SIZE, color=WHITE, line_spacing=ANIM_STEP_DESC_LINE_SPACING)
+            new_inst.next_to(new_title, DOWN, buff=ANIM_STEP_DESC_BUFF)
 
-            info_box = VGroup(s_title, s_desc).arrange(DOWN, aligned_edge=LEFT, buff=ANIM_INFO_BOX_ROW_BUFF).to_corner(DL, buff=ANIM_INFO_BOX_BUFF)
-            self.play(FadeIn(info_box), run_time=0.25)
+            self.play(
+                ReplacementTransform(step_title_mobj, new_title),
+                ReplacementTransform(step_inst_mobj, new_inst),
+                run_time=ANIM_STEP_TRANSFORM_RUN_TIME,
+            )
+            step_title_mobj = new_title
+            step_inst_mobj = new_inst
 
-            action = step.get("action", "").lower()
-            step_text = (step.get("title", "") + " " + step.get("instruction", "")).lower()
+            act = step.get("action", {})
+            act_name = (act.get("name") if isinstance(act, dict) else str(act)).lower()
+            target_key = act.get("target")
 
-            if action == "prep_glass":
-                if "sugar" in step_text:
-                    sugar_ing = next((i for i in ingredients if "sugar" in i["name"].lower()), None)
-                    if sugar_ing:
-                        added_ingredients.add(sugar_ing["name"])
+            is_top_step = (
+                "top" in raw_title.lower()
+                or "top with" in raw_inst.lower()
+                or str(act.get("amount", "")).lower() == "top the cocktail"
+            )
 
-                    sugar_cube_mobj = Square(
-                        side_length=ANIM_SUGAR_CUBE_SIDE,
-                        fill_color=ANIM_COLOR_SUGAR_CUBE,
-                        fill_opacity=1.0,
-                        stroke_color=GREY_B,
-                        stroke_width=ANIM_SUGAR_CUBE_STROKE_WIDTH,
-                    ).move_to([vessel_x, vessel_bottom + 0.19, 0])
+            if build_in_glass or target_key == "serving_glass" or already_strained or is_top_step:
+                current_state = vessels["serving_glass"]
+            elif target_key in ["shaker", "mixing_glass"]:
+                current_state = vessels.get("prep", vessels.get("serving_glass"))
+            else:
+                current_state = vessels.get(active_target)
 
-                    self.play(FadeIn(sugar_cube_mobj, shift=DOWN * 1.5), run_time=0.4)
-                    liquid_layers.add(sugar_cube_mobj)
-                else:
-                    ice_target = glass_group if not is_built_in_glass else active_vessel
-                    glass_ice = VGroup(
-                        Square(side_length=ANIM_ICE_MEDIUM_SIDE, fill_color=WHITE, fill_opacity=ANIM_ICE_FILL_OPACITY_MEDIUM, stroke_width=ANIM_ICE_STROKE_WIDTH_THIN),
-                        Square(side_length=ANIM_ICE_MEDIUM_SIDE, fill_color=WHITE, fill_opacity=ANIM_ICE_FILL_OPACITY_MEDIUM, stroke_width=ANIM_ICE_STROKE_WIDTH_THIN),
-                    ).arrange(UP, buff=0.08).move_to(ice_target.get_center() + DOWN * 0.3)
-                    self.play(FadeIn(glass_ice), run_time=0.3)
+            ensure_vessel_visible(current_state)
+            container = current_state.container
+            cx = container.outline.get_bottom()[0]
+            bot_y = container.outline.get_bottom()[1]
+            top_y = container.outline.get_top()[1]
 
-            elif action == "chill":
-                target_glass = glass_group if not is_built_in_glass else active_vessel
-                frost = target_glass.copy().set_color(BLUE_B).set_stroke(width=ANIM_ACCENT_STROKE_WIDTH)
-                self.play(Transform(target_glass, frost), run_time=0.4)
-
-            elif action == "muddle":
-                if sugar_cube_mobj is not None:
-                    muddler = RoundedRectangle(
-                        corner_radius=ANIM_MUDDLER_CORNER_RADIUS, height=ANIM_MUDDLER_HEIGHT, width=ANIM_MUDDLER_WIDTH, color=GREY_B, fill_opacity=1
-                    ).move_to([vessel_x, vessel_top_y + 0.8, 0])
-                    
-                    self.play(muddler.animate.move_to([vessel_x, vessel_bottom + 1.25, 0]), run_time=0.35)
-                    for _ in range(2):
-                        self.play(muddler.animate.shift(UP * 0.2), run_time=0.1)
-                        self.play(muddler.animate.shift(DOWN * 0.2), run_time=0.1)
-
-                    paste_top_y = vessel_bottom + 0.24
-                    dissolved_paste = self.get_layer_shape(glass_type, vessel_bottom, paste_top_y, vessel_w, ANIM_COLOR_MUDDLE_PASTE).shift(RIGHT * vessel_x)
-
-                    self.play(
-                        Transform(liquid_layers, VGroup(dissolved_paste)),
-                        FadeOut(muddler, shift=UP * 1.0),
-                        run_time=0.35,
-                    )
-                    current_fill_y = paste_top_y
-                    sugar_cube_mobj = None
-                else:
-                    muddle_candidates = [
-                        i for i in ingredients
-                        if any(k in i["name"].lower() for k in ("basil", "mint", "herb", "lemon", "lime"))
-                        and i["name"] not in added_ingredients
-                    ]
-                    for item in muddle_candidates:
-                        added_ingredients.add(item["name"])
-                        if any(k in item["name"].lower() for k in ("basil", "mint", "leaf", "leaves")):
-                            leaves = VGroup(
-                                Ellipse(width=0.25, height=0.12, fill_color=ANIM_COLOR_MINT_LEAF_1, fill_opacity=1, stroke_width=0).rotate(0.3),
-                                Ellipse(width=0.25, height=0.12, fill_color=ANIM_COLOR_MINT_LEAF_2, fill_opacity=1, stroke_width=0).rotate(-0.4),
-                                Ellipse(width=0.22, height=0.10, fill_color=ANIM_COLOR_MINT_LEAF_3, fill_opacity=1, stroke_width=0).rotate(0.8),
-                            ).arrange(RIGHT, buff=0.08).move_to([vessel_x, current_fill_y + 0.15, 0])
-                            self.play(FadeIn(leaves, shift=DOWN * 1.2), run_time=0.35)
-                            liquid_layers.add(leaves)
-                            current_fill_y += 0.2
-                        else:
-                            item_col = item.get("color", "#F4E04D")
-                            stream = Line(
-                                [vessel_x, vessel_top_y + 0.8, 0],
-                                [vessel_x, current_fill_y, 0],
-                                stroke_color=item_col, stroke_width=ANIM_ACCENT_STROKE_WIDTH
-                            )
-                            rect = Rectangle(
-                                width=vessel_w, height=0.45, fill_color=item_col, fill_opacity=ANIM_LAYER_FILL_OPACITY, stroke_width=0
-                            ).move_to([vessel_x, current_fill_y + 0.45 / 2, 0])
-                            current_fill_y += 0.45
-                            liquid_layers.add(rect)
-                            self.play(Create(stream), run_time=0.2)
-                            self.play(GrowFromEdge(rect, DOWN), FadeOut(stream), run_time=0.35)
-
-                    muddler = RoundedRectangle(
-                        corner_radius=ANIM_MUDDLER_CORNER_RADIUS, height=ANIM_MUDDLER_HEIGHT, width=ANIM_MUDDLER_WIDTH, color=GREY_B, fill_opacity=1
-                    ).move_to([vessel_x, vessel_top_y + 0.8, 0])
-                    self.play(muddler.animate.shift(DOWN * 1.9), run_time=0.3)
-                    for _ in range(2):
-                        self.play(muddler.animate.shift(UP * 0.2), run_time=0.1)
-                        self.play(muddler.animate.shift(DOWN * 0.2), run_time=0.1)
-                    self.play(FadeOut(muddler, shift=UP * 0.8), run_time=0.2)
-
-            elif action in ("measure", "combine", "pour"):
-                unadded = [i for i in ingredients if i["name"] not in added_ingredients]
-                matched_items = []
-                for item in unadded:
-                    keywords = [w.lower() for w in item["name"].split() if len(w) > 3]
-                    if any(kw in step_text for kw in keywords):
-                        matched_items.append(item)
-
-                if not matched_items:
-                    if "all" in step_text or "equal parts" in step_text or len(unadded) == 1:
-                        matched_items = unadded
-                    else:
-                        matched_items = unadded[:1]
-
-                for item in matched_items:
-                    added_ingredients.add(item["name"])
-                    iname = item["name"].lower()
-                    item_col = item.get("color", "#FFFFFF")
-
-                    if "bitter" in iname:
-                        item_col = item.get("color", ANIM_COLOR_BITTERS_DEFAULT)
-                        dashes = VGroup(
-                            Dot(radius=0.07, color=item_col),
-                            Dot(radius=0.06, color=item_col),
-                            Dot(radius=0.07, color=item_col)
-                        ).arrange(DOWN, buff=0.12).move_to([vessel_x, vessel_bottom + 0.55, 0])
-
-                        base_layer = self.get_layer_shape(glass_type, vessel_bottom, vessel_bottom + 0.16, vessel_w, item_col).shift(RIGHT * vessel_x)
-                        current_fill_y = max(current_fill_y, vessel_bottom + 0.16)
-                        liquid_layers.add(base_layer)
-
-                        self.play(FadeIn(dashes, shift=DOWN * 0.4), run_time=0.25)
-                        self.play(GrowFromEdge(base_layer, DOWN), FadeOut(dashes), run_time=0.25)
-
-                    elif is_built_in_glass:
-                        step_h = 0.9 if "whiskey" in iname or "gin" in iname or "spirit" in iname else 0.35
-                        layer_mobj = self.get_layer_shape(glass_type, current_fill_y, current_fill_y + step_h, vessel_w, item_col).shift(RIGHT * vessel_x)
-
-                        stream = Line(
-                            [vessel_x, vessel_top_y + 0.8, 0],
-                            [vessel_x, current_fill_y, 0],
-                            stroke_color=item_col,
-                            stroke_width=ANIM_ACCENT_STROKE_WIDTH,
-                        )
-                        current_fill_y += step_h
-                        liquid_layers.add(layer_mobj)
-
-                        self.play(Create(stream), run_time=0.2)
-                        self.play(GrowFromEdge(layer_mobj, DOWN), FadeOut(stream), run_time=0.35)
-
-                    else:
-                        layer_h = 1.7 / max(len(ingredients), 1)
-                        stream = Line(
-                            [vessel_x, vessel_top_y + 0.8, 0],
-                            [vessel_x, current_fill_y, 0],
-                            stroke_color=item_col,
-                            stroke_width=ANIM_ACCENT_STROKE_WIDTH,
-                        )
-                        rect = Rectangle(
-                            width=vessel_w,
-                            height=layer_h,
-                            fill_color=item_col,
-                            fill_opacity=ANIM_LAYER_FILL_OPACITY,
-                            stroke_width=0,
-                        ).move_to([vessel_x, current_fill_y + layer_h / 2, 0])
-                        current_fill_y += layer_h
-                        liquid_layers.add(rect)
-
-                        self.play(Create(stream), run_time=0.2)
-                        self.play(GrowFromEdge(rect, DOWN), FadeOut(stream), run_time=0.35)
-
-            elif action == "ice":
-                if is_built_in_glass or "single" in step_text or "large" in step_text:
-                    ice_cube = Square(side_length=ANIM_ICE_LARGE_SIDE, fill_color=WHITE, fill_opacity=ANIM_ICE_FILL_OPACITY_LARGE, stroke_width=ANIM_ICE_STROKE_WIDTH_MEDIUM).move_to(
-                        [vessel_x, current_fill_y + 0.35, 0]
-                    )
-                    self.play(FadeIn(ice_cube, shift=DOWN * 0.4), run_time=0.35)
-                    liquid_layers.add(ice_cube)
-                else:
-                    ice_cubes = VGroup(
-                        Square(side_length=ANIM_ICE_SMALL_SIDE, fill_color=WHITE, fill_opacity=ANIM_ICE_FILL_OPACITY_SMALL, stroke_width=ANIM_ICE_STROKE_WIDTH_THIN),
-                        Square(side_length=ANIM_ICE_SMALL_SIDE, fill_color=WHITE, fill_opacity=ANIM_ICE_FILL_OPACITY_SMALL, stroke_width=ANIM_ICE_STROKE_WIDTH_THIN),
-                        Square(side_length=ANIM_ICE_SMALL_SIDE, fill_color=WHITE, fill_opacity=ANIM_ICE_FILL_OPACITY_SMALL, stroke_width=ANIM_ICE_STROKE_WIDTH_THIN),
-                    ).arrange(RIGHT, buff=0.08).next_to(current_fill_y * UP + active_vessel.get_center()[0] * RIGHT, UP, buff=0.08)
-                    self.play(FadeIn(ice_cubes, shift=DOWN * 0.3), run_time=0.3)
-                    liquid_layers.add(ice_cubes)
-
-            elif action == "shake":
-                blended_fill = Rectangle(
-                    width=vessel_w,
-                    height=max(current_fill_y - vessel_bottom, 1.2),
-                    fill_color=final_color,
-                    fill_opacity=ANIM_SHAKEN_FILL_OPACITY,
-                    stroke_width=0,
-                ).move_to([vessel_x, (vessel_bottom + current_fill_y) / 2, 0])
-
-                shaker_assembly = VGroup(active_vessel, liquid_layers)
-                self.play(Transform(liquid_layers, blended_fill), run_time=0.25)
-
-                for _ in range(3):
-                    self.play(shaker_assembly.animate.rotate(0.12).shift(UP * 0.15), run_time=0.08)
-                    self.play(shaker_assembly.animate.rotate(-0.24).shift(DOWN * 0.3), run_time=0.08)
-                    self.play(shaker_assembly.animate.rotate(0.12).shift(UP * 0.15), run_time=0.08)
-
-            elif action == "stir":
-                barspoon_shaft = Line(ORIGIN, UP * 3.2, stroke_color=LIGHT_GRAY, stroke_width=ANIM_GLASS_STROKE_WIDTH)
-                spoon_head = Ellipse(width=0.22, height=0.35, fill_color=GREY_A, fill_opacity=1, stroke_width=0).next_to(barspoon_shaft, DOWN, buff=0)
-                barspoon = VGroup(barspoon_shaft, spoon_head).move_to([vessel_x, vessel_top_y + 0.8, 0])
-
-                self.play(barspoon.animate.move_to([vessel_x, vessel_bottom + 1.25, 0]), run_time=0.35)
-
-                orbit_x = ANIM_BARSPOON_ORBIT_X
-                for _ in range(3):
-                    self.play(barspoon.animate.shift(RIGHT * orbit_x), run_time=0.12, rate_func=linear)
-                    self.play(barspoon.animate.shift(LEFT * (orbit_x * 2)), run_time=0.18, rate_func=linear)
-                    self.play(barspoon.animate.shift(RIGHT * orbit_x), run_time=0.12, rate_func=linear)
-
-                if is_built_in_glass:
-                    blended_fill = self.get_layer_shape(glass_type, vessel_bottom, min(current_fill_y + 0.15, -0.6), vessel_w, final_color, ANIM_STIRRED_FILL_OPACITY).shift(RIGHT * vessel_x)
-                else:
-                    blended_fill = Rectangle(
-                        width=vessel_w,
-                        height=max(current_fill_y - vessel_bottom, 1.2),
-                        fill_color=final_color,
-                        fill_opacity=ANIM_STIRRED_FILL_OPACITY,
-                        stroke_width=0,
-                    ).move_to([vessel_x, (vessel_bottom + current_fill_y) / 2, 0])
-
-                self.play(Transform(liquid_layers, blended_fill), FadeOut(barspoon, shift=UP * 1.2), run_time=0.4)
-
-            elif action == "strain":
-                rim_target = [glass_group.get_center()[0], glass_group.get_top()[1] - 0.15, 0]
-
-                pour_arc = CubicBezier(
-                    active_vessel.get_top() + LEFT * 0.2,
-                    active_vessel.get_top() + UP * 0.6 + RIGHT * 0.4,
-                    rim_target + UP * 0.5 + LEFT * 0.4,
-                    rim_target,
-                    color=final_color,
-                    stroke_width=ANIM_STRAIN_ARC_STROKE_WIDTH,
+            # 1. Chill Action
+            if act_name == "chill":
+                frost = container.outline.copy().set_color(BLUE_A).set_stroke(
+                    width=ANIM_CHILL_FROST_STROKE_WIDTH, opacity=ANIM_CHILL_FROST_STROKE_OPACITY
                 )
-                glass_fill.set_fill(color=final_color, opacity=ANIM_STRAINED_FILL_OPACITY)
+                self.play(FadeIn(frost), run_time=0.4)
+                self.play(frost.animate.set_opacity(ANIM_CHILL_FADE_TARGET_OPACITY), run_time=0.3)
+                self.remove(frost)
+                if not build_in_glass and "prep" in vessels:
+                    ensure_vessel_visible(vessels["prep"])
 
-                self.play(Create(pour_arc), run_time=0.35)
-                self.play(FadeOut(liquid_layers), FadeIn(glass_fill), run_time=0.6)
-                self.play(FadeOut(pour_arc), run_time=0.2)
+            # 2. Ice Action
+            elif act_name == "ice":
+                ice_type = act.get("ice_type", "cubed")
 
-            elif action == "garnish":
-                target_glass = glass_group if not is_built_in_glass else active_vessel
-                top_edge = target_glass.get_top()
-                if any("basil" in i["name"].lower() or "mint" in i["name"].lower() for i in ingredients):
-                    leaf1 = Ellipse(width=0.32, height=0.16, fill_color=ANIM_COLOR_GARNISH_LEAF_1, fill_opacity=1, stroke_width=0).rotate(PI / 4)
-                    leaf2 = Ellipse(width=0.32, height=0.16, fill_color=ANIM_COLOR_GARNISH_LEAF_2, fill_opacity=1, stroke_width=0).rotate(-PI / 4)
-                    garnish_mob = VGroup(leaf1, leaf2).move_to(top_edge + UP * 0.1 + RIGHT * 0.35)
-                elif any("orange" in i["name"].lower() or "twist" in i["name"].lower() or "peel" in step_text for i in ingredients) or "peel" in step_text:
-                    garnish_mob = Arc(radius=0.28, start_angle=-PI / 3, angle=1.4 * PI, stroke_color=ANIM_COLOR_ORANGE_TWIST, stroke_width=ANIM_ACCENT_STROKE_WIDTH)
-                    garnish_mob.move_to(top_edge + UP * 0.12 + RIGHT * 0.38)
+                if ice_type in ["large_rock", "sphere"]:
+                    if ice_type == "sphere":
+                        ice = Circle(
+                            radius=ANIM_ICE_SPHERE_RADIUS,
+                            fill_color=ANIM_COLOR_ICE,
+                            fill_opacity=ANIM_ICE_LARGE_FILL_OPACITY,
+                            stroke_color=WHITE,
+                            stroke_width=ANIM_ICE_STROKE_WIDTH,
+                        )
+                    else:
+                        ice = RoundedRectangle(
+                            corner_radius=ANIM_ICE_ROCK_CORNER_RADIUS,
+                            height=ANIM_ICE_ROCK_SIZE,
+                            width=ANIM_ICE_ROCK_SIZE,
+                            fill_color=ANIM_COLOR_ICE,
+                            fill_opacity=ANIM_ICE_LARGE_FILL_OPACITY,
+                            stroke_color=WHITE,
+                            stroke_width=ANIM_ICE_STROKE_WIDTH,
+                        )
+                    ice.move_to(np.array([cx, bot_y + current_state.solid_h + ANIM_ICE_LARGE_Y_OFFSET, 0]))
+                    ice.set_z_index(ANIM_SOLIDS_Z_INDEX)
+                    current_state.solid_h += ANIM_ICE_LARGE_HEIGHT_DELTA
+                    self.play(FadeIn(ice, shift=DOWN * 0.8), run_time=0.35)
+                    current_state.solids.add(ice)
+                else:  # cubed / crushed
+                    num_cubes = ANIM_ICE_CUBE_COUNT_PREP if "shaker" in container.c_type or "mixing" in container.c_type else ANIM_ICE_CUBE_COUNT_SERVING
+                    for i in range(num_cubes):
+                        ice = RoundedRectangle(
+                            corner_radius=ANIM_ICE_CUBE_CORNER_RADIUS,
+                            height=ANIM_ICE_CUBE_SIZE,
+                            width=ANIM_ICE_CUBE_SIZE,
+                            fill_color=ANIM_COLOR_ICE,
+                            fill_opacity=ANIM_ICE_CUBE_FILL_OPACITY,
+                            stroke_color=WHITE,
+                            stroke_width=ANIM_ICE_STROKE_WIDTH,
+                        )
+                        offset_x = (i - (num_cubes - 1) / 2) * ANIM_ICE_CUBE_X_SPACING
+                        y_pos = bot_y + current_state.solid_h + ANIM_ICE_CUBE_Y_OFFSET
+                        ice.move_to(np.array([cx + offset_x, y_pos, 0]))
+                        ice.set_z_index(ANIM_SOLIDS_Z_INDEX)
+                        self.play(FadeIn(ice, shift=DOWN * 0.6), run_time=0.25)
+                        current_state.solids.add(ice)
+                    current_state.solid_h += ANIM_ICE_CUBE_HEIGHT_DELTA
+
+            # 3. Measure / Add Action
+            elif act_name == "measure":
+                item_key = act.get("what", "")
+                meta = ing_lookup.get(item_key, {"color": ANIM_COLOR_DEFAULT_LIQUID, "type": "liquid"})
+                itype = meta["type"]
+                col = meta["color"]
+
+                if itype in ["liquid", "bitters"]:
+                    amt = act.get("amount", ANIM_MEASURE_DEFAULT_AMOUNT_ML)
+
+                    if is_top_step:
+                        target_top = container.h - ANIM_MEASURE_TOP_MARGIN
+                        thickness = max(target_top - current_state.liquid_h, ANIM_MEASURE_TOP_MIN_THICKNESS)
+                    else:
+                        if itype == "bitters" or act.get("unit") == "dash":
+                            thickness = float(amt) * ANIM_MEASURE_DASH_HEIGHT_SCALE
+                        elif isinstance(amt, (int, float)):
+                            thickness = float(amt) * ANIM_ML_TO_HEIGHT_SCALE
+                        else:
+                            thickness = ANIM_MEASURE_FALLBACK_THICKNESS
+
+                        max_avail = max((container.h - ANIM_MEASURE_MAX_FILL_MARGIN) - current_state.liquid_h, ANIM_MEASURE_MIN_AVAILABLE_HEIGHT)
+                        thickness = min(thickness, max_avail)
+
+                    layer = container.get_layer_polygon(
+                        current_state.liquid_h, current_state.liquid_h + thickness, color=col
+                    )
+
+                    stream_start = np.array([cx, top_y + ANIM_MEASURE_STREAM_START_OFFSET, 0])
+                    stream_end = np.array([cx, bot_y + current_state.liquid_h, 0])
+                    stream = Line(
+                        stream_start,
+                        stream_end,
+                        stroke_width=ANIM_MEASURE_STREAM_STROKE_WIDTH_LIQUID if itype == "liquid" else ANIM_MEASURE_STREAM_STROKE_WIDTH_OTHER,
+                        color=col,
+                    )
+                    stream.set_z_index(ANIM_MEASURE_STREAM_Z_INDEX)
+
+                    current_state.liquid_h += thickness
+                    current_state.liquid_colors.append(col)
+
+                    self.play(Create(stream), run_time=0.20)
+                    self.play(FadeIn(layer, shift=UP * 0.05), run_time=0.35)
+                    self.play(FadeOut(stream), run_time=0.15)
+                    current_state.layers.add(layer)
+                else:  # solid
+                    if "leaf" in item_key or "basil" in item_key:
+                        solid = Ellipse(
+                            width=ANIM_SOLID_LEAF_WIDTH,
+                            height=ANIM_SOLID_LEAF_HEIGHT,
+                            fill_color=col,
+                            fill_opacity=ANIM_SOLID_LEAF_FILL_OPACITY,
+                            stroke_color=WHITE,
+                            stroke_width=ANIM_SOLID_STROKE_WIDTH,
+                        )
+                    else:
+                        solid = Square(
+                            side_length=ANIM_SOLID_SQUARE_SIDE,
+                            fill_color=col,
+                            fill_opacity=ANIM_SOLID_SQUARE_FILL_OPACITY,
+                            stroke_color=WHITE,
+                            stroke_width=ANIM_SOLID_STROKE_WIDTH,
+                        )
+                    solid.move_to(np.array([cx, bot_y + current_state.solid_h + ANIM_SOLID_Y_OFFSET, 0]))
+                    solid.set_z_index(ANIM_SOLIDS_Z_INDEX)
+                    current_state.solid_h += ANIM_SOLID_HEIGHT_DELTA
+                    self.play(FadeIn(solid, shift=DOWN * 0.8), run_time=0.35)
+                    current_state.solids.add(solid)
+
+            # 4. Shake Action
+            elif act_name == "shake":
+                if current_state.liquid_colors:
+                    rgbs = [hex_to_rgb(c) for c in current_state.liquid_colors]
+                    blended_hex = rgb_to_hex(np.mean(rgbs, axis=0))
                 else:
-                    garnish_mob = Triangle(fill_color=WHITE, fill_opacity=1, stroke_width=1).scale(0.18).rotate(-PI / 4)
-                    garnish_mob.move_to(top_edge + UP * 0.12 + RIGHT * 0.65)
+                    blended_hex = ANIM_COLOR_DEFAULT_SHAKE_BLEND
 
-                self.play(FadeIn(garnish_mob, scale=1.3), run_time=0.35)
+                total_h = current_state.liquid_h
+                merged = container.get_layer_polygon(0, total_h, color=blended_hex, opacity=0.92)
+
+                rigidbody = current_state.get_content_group()
+                self.play(Wiggle(
+                    rigidbody, scale_value=1.0, rotation_angle=ANIM_SHAKE_WIGGLE_ROTATION,
+                    n_wiggles=ANIM_SHAKE_WIGGLE_COUNT, run_time=ANIM_SHAKE_WIGGLE_RUN_TIME,
+                ))
+
+                self.play(
+                    FadeOut(current_state.layers),
+                    FadeOut(current_state.solids),
+                    FadeIn(merged),
+                    run_time=0.45,
+                )
+
+                current_state.layers = VGroup(merged)
+                current_state.solids = VGroup()
+                current_state.liquid_h = total_h
+                current_state.solid_h = 0.0
+                current_state.liquid_colors = [blended_hex]
+
+            # 5. Muddle Action
+            elif act_name == "muddle":
+                if current_state.liquid_colors:
+                    rgbs = [hex_to_rgb(c) for c in current_state.liquid_colors]
+                    blended_hex = rgb_to_hex(np.mean(rgbs, axis=0))
+                else:
+                    blended_hex = ANIM_COLOR_DEFAULT_MUDDLE_BLEND
+
+                m_head = RoundedRectangle(
+                    corner_radius=ANIM_MUDDLER_HEAD_CORNER_RADIUS,
+                    height=ANIM_MUDDLER_HEAD_HEIGHT,
+                    width=ANIM_MUDDLER_HEAD_WIDTH,
+                    fill_color=ANIM_COLOR_MUDDLER_WOOD_DARK,
+                    fill_opacity=1,
+                    stroke_color=ANIM_COLOR_MUDDLER_WOOD_DARKEST,
+                    stroke_width=ANIM_MUDDLER_STROKE_WIDTH,
+                )
+                groove = Line(
+                    m_head.get_left() + RIGHT * 0.05,
+                    m_head.get_right() + LEFT * 0.05,
+                    stroke_width=ANIM_MUDDLER_STROKE_WIDTH,
+                    color=ANIM_COLOR_MUDDLER_WOOD_DARKEST,
+                ).shift(DOWN * 0.08)
+
+                handle_len = max(container.h + ANIM_MUDDLER_HANDLE_HEIGHT_PADDING, ANIM_MUDDLER_HANDLE_MIN_HEIGHT)
+                m_handle = RoundedRectangle(
+                    corner_radius=ANIM_MUDDLER_HANDLE_CORNER_RADIUS,
+                    height=handle_len,
+                    width=ANIM_MUDDLER_HANDLE_WIDTH,
+                    fill_color=ANIM_COLOR_MUDDLER_WOOD_LIGHT,
+                    fill_opacity=1,
+                    stroke_color=ANIM_COLOR_MUDDLER_WOOD_MEDIUM,
+                    stroke_width=ANIM_MUDDLER_STROKE_WIDTH,
+                ).next_to(m_head, UP, buff=-0.08)
+
+                m_pommel = Circle(
+                    radius=ANIM_MUDDLER_POMMEL_RADIUS,
+                    fill_color=ANIM_COLOR_MUDDLER_WOOD_DARK,
+                    fill_opacity=1,
+                    stroke_color=ANIM_COLOR_MUDDLER_WOOD_DARKEST,
+                    stroke_width=ANIM_MUDDLER_STROKE_WIDTH,
+                ).next_to(m_handle, UP, buff=-0.06)
+
+                muddler = VGroup(m_head, groove, m_handle, m_pommel)
+                muddler.set_z_index(ANIM_TOOL_Z_INDEX)
+
+                target_bot_y = bot_y + 0.05
+                muddler.move_to(np.array([cx, target_bot_y + muddler.height / 2, 0]))
+
+                self.play(FadeIn(muddler, shift=DOWN * 1.0), run_time=0.35)
+
+                # Realistic press & twist strokes against glass bottom
+                self.play(
+                    muddler.animate.shift(DOWN * 0.05).rotate(0.20, about_point=muddler.get_bottom()),
+                    run_time=0.25,
+                )
+                self.play(
+                    muddler.animate.shift(UP * 0.15).rotate(-0.40, about_point=muddler.get_bottom()),
+                    run_time=0.25,
+                )
+                self.play(
+                    muddler.animate.shift(DOWN * 0.10).rotate(0.20, about_point=muddler.get_bottom()),
+                    run_time=0.25,
+                )
+                self.play(FadeOut(muddler, shift=UP * 0.9), run_time=0.3)
+
+                total_h = max(current_state.liquid_h, ANIM_MUDDLE_MIN_HEIGHT)
+                merged = container.get_layer_polygon(0, total_h, color=blended_hex, opacity=0.92)
+
+                self.play(
+                    FadeOut(current_state.layers),
+                    FadeOut(current_state.solids),
+                    FadeIn(merged),
+                    run_time=0.40,
+                )
+                current_state.layers = VGroup(merged)
+                current_state.solids = VGroup()
+                current_state.liquid_h = total_h
+                current_state.solid_h = 0.0
+                current_state.liquid_colors = [blended_hex]
+
+            # 6. Stir Action
+            elif act_name == "stir":
+                if current_state.liquid_colors:
+                    rgbs = [hex_to_rgb(c) for c in current_state.liquid_colors]
+                    blended_hex = rgb_to_hex(np.mean(rgbs, axis=0))
+                else:
+                    blended_hex = ANIM_COLOR_DEFAULT_STIR_BLEND
+
+                s_bowl = Ellipse(
+                    width=ANIM_SPOON_BOWL_WIDTH,
+                    height=ANIM_SPOON_BOWL_HEIGHT,
+                    fill_color=ANIM_COLOR_SPOON_METAL_LIGHT,
+                    fill_opacity=1,
+                    stroke_color=ANIM_COLOR_SPOON_METAL_DARK,
+                    stroke_width=ANIM_SPOON_STROKE_WIDTH,
+                )
+                s_inner = Ellipse(
+                    width=ANIM_SPOON_INNER_WIDTH,
+                    height=ANIM_SPOON_INNER_HEIGHT,
+                    fill_color=ANIM_COLOR_SPOON_INNER,
+                    fill_opacity=ANIM_SPOON_INNER_OPACITY,
+                    stroke_width=0,
+                ).shift(LEFT * 0.03)
+
+                stem_len = container.h + ANIM_SPOON_STEM_HEIGHT_PADDING
+                s_stem = Line(
+                    s_bowl.get_top(),
+                    s_bowl.get_top() + UP * stem_len,
+                    stroke_width=ANIM_SPOON_STEM_STROKE_WIDTH,
+                    color=ANIM_COLOR_SPOON_METAL_LIGHT,
+                )
+
+                s_spirals = VGroup()
+                for y_off in np.linspace(ANIM_SPOON_SPIRAL_MARGIN, stem_len - ANIM_SPOON_SPIRAL_MARGIN, ANIM_SPOON_SPIRAL_COUNT):
+                    s_spirals.add(
+                        Line(
+                            s_stem.get_start() + UP * y_off + LEFT * ANIM_SPOON_SPIRAL_X_OFFSET,
+                            s_stem.get_start() + UP * (y_off + ANIM_SPOON_SPIRAL_Y_STEP) + RIGHT * ANIM_SPOON_SPIRAL_X_OFFSET,
+                            stroke_width=ANIM_SPOON_STROKE_WIDTH,
+                            color=ANIM_COLOR_SPOON_METAL_DARK,
+                        )
+                    )
+
+                s_knob = Circle(
+                    radius=ANIM_SPOON_KNOB_RADIUS,
+                    fill_color=ANIM_COLOR_SPOON_KNOB,
+                    fill_opacity=1,
+                    stroke_color=ANIM_COLOR_SPOON_KNOB_STROKE,
+                    stroke_width=1,
+                ).next_to(s_stem, UP, buff=0)
+
+                spoon = VGroup(s_bowl, s_inner, s_stem, s_spirals, s_knob)
+                spoon.set_z_index(ANIM_TOOL_Z_INDEX)
+
+                rx = min(container.w_bot, container.w_top) * ANIM_STIR_ORBIT_RADIUS_RATIO
+                ry = ANIM_STIR_ORBIT_RY
+                cy_orbit = bot_y + ANIM_STIR_ORBIT_Y_OFFSET + spoon.height / 2
+
+                orbit = ParametricFunction(
+                    lambda t: np.array([cx + rx * np.cos(t), cy_orbit + ry * np.sin(t), 0]),
+                    t_range=[0, ANIM_STIR_ORBIT_ANGLE_PI_MULTIPLIER * PI],
+                )
+
+                spoon.move_to(np.array([cx + rx, cy_orbit, 0]))
+                self.play(FadeIn(spoon, shift=DOWN * 0.8), run_time=0.35)
+
+                if len(current_state.solids) > 0:
+                    self.play(
+                        MoveAlongPath(spoon, orbit),
+                        current_state.solids.animate.rotate(ANIM_STIR_SOLIDS_ROTATE, about_point=container.get_center()),
+                        run_time=ANIM_STIR_ORBIT_RUN_TIME,
+                        rate_func=linear,
+                    )
+                else:
+                    self.play(
+                        MoveAlongPath(spoon, orbit),
+                        run_time=ANIM_STIR_ORBIT_RUN_TIME,
+                        rate_func=linear,
+                    )
+
+                self.play(FadeOut(spoon, shift=UP * 0.8), run_time=0.25)
+
+                total_h = current_state.liquid_h
+                merged = container.get_layer_polygon(0, total_h, color=blended_hex, opacity=0.92)
+                self.play(
+                    FadeOut(current_state.layers),
+                    FadeIn(merged),
+                    run_time=0.40,
+                )
+                current_state.layers = VGroup(merged)
+                current_state.liquid_h = total_h
+                current_state.liquid_colors = [blended_hex]
+
+            # 7. Strain Action
+            elif act_name == "strain":
+                source_state = vessels.get("prep", current_state)
+                dest_state = vessels["serving_glass"]
+                ensure_vessel_visible(dest_state)
+
+                straining_color = source_state.liquid_colors[0] if source_state.liquid_colors else ANIM_COLOR_DEFAULT_STRAIN
+
+                rim_h = dest_state.container.h - ANIM_STRAIN_RIM_MARGIN
+                if has_foam:
+                    foam_thickness = ANIM_STRAIN_FOAM_THICKNESS
+                    liquid_thickness = max(rim_h - foam_thickness - dest_state.liquid_h, ANIM_STRAIN_FOAM_MIN_LIQUID_THICKNESS)
+                else:
+                    foam_thickness = 0.0
+                    liquid_thickness = min(source_state.liquid_h, rim_h - dest_state.liquid_h)
+
+                strained_layer = dest_state.container.get_layer_polygon(
+                    dest_state.liquid_h, dest_state.liquid_h + liquid_thickness, color=straining_color
+                )
+                dest_state.liquid_h += liquid_thickness
+                dest_state.liquid_colors.append(straining_color)
+
+                # Tilt pivot point at shaker's top-right lip
+                source_cx = source_state.container.get_center()[0]
+                source_top_y = source_state.container.outline.get_top()[1]
+                tilt_point = np.array([source_cx + source_state.container.w_top / 2, source_top_y, 0])
+
+                tilt_mobjects = VGroup(source_state.container, source_state.layers, source_state.solids)
+
+                # Phase 1: Shaker and contents rotate to the right
+                self.play(
+                    tilt_mobjects.animate.rotate(-ANIM_STRAIN_TILT_ANGLE, about_point=tilt_point),
+                    run_time=ANIM_STRAIN_TILT_RUN_TIME,
+                )
+
+                # Phase 2: Vessel stops rotating. Pour stream appears and shaker liquid vanishes into serving glass
+                p_start = tilt_point + DOWN * 0.05 + RIGHT * 0.05
+                p_end = np.array([dest_state.container.get_center()[0], dest_state.container.outline.get_top()[1], 0])
+                pour_curve = CubicBezier(
+                    p_start,
+                    p_start + UP * 0.35 + RIGHT * 0.55,
+                    p_end + UP * 0.65 + LEFT * 0.45,
+                    p_end,
+                    color=straining_color,
+                    stroke_width=ANIM_STRAIN_POUR_STROKE_WIDTH,
+                )
+
+                fading_out = [FadeOut(mob) for mob in list(source_state.layers) + list(source_state.solids)]
+                incoming = [FadeIn(strained_layer, shift=UP * 0.15)]
+                foam_layer = None
+
+                if has_foam:
+                    foam_layer = dest_state.container.get_layer_polygon(
+                        dest_state.liquid_h,
+                        dest_state.liquid_h + foam_thickness,
+                        color=ANIM_COLOR_FOAM,
+                        opacity=1.0,
+                    )
+                    foam_layer.set_z_index(ANIM_STRAIN_FOAM_Z_INDEX)
+                    dest_state.liquid_h += foam_thickness
+                    incoming.append(FadeIn(foam_layer, shift=DOWN * 0.12))
+
+                self.play(Create(pour_curve), run_time=0.20)
+                self.play(*(fading_out + incoming), run_time=ANIM_STRAIN_TRANSFER_RUN_TIME)
+                self.play(FadeOut(pour_curve), run_time=0.15)
+
+                for sub in list(source_state.layers) + list(source_state.solids):
+                    self.remove(sub)
+                source_state.layers = VGroup()
+                source_state.solids = VGroup()
+                source_state.liquid_h = 0.0
+                source_state.solid_h = 0.0
+                source_state.liquid_colors = []
+
+                # Phase 3: Empty shaker rotates back upright
+                self.play(
+                    source_state.container.animate.rotate(ANIM_STRAIN_TILT_ANGLE, about_point=tilt_point),
+                    run_time=ANIM_STRAIN_TILT_BACK_RUN_TIME,
+                )
+
+                dest_state.layers.add(strained_layer)
+                if foam_layer:
+                    dest_state.layers.add(foam_layer)
+
+                already_strained = True
+
+            # 8. Garnish Action
+            elif act_name == "garnish":
+                dest_container = vessels["serving_glass"].container
+                placement = act.get("placement", "float")
+                g_col = act.get("color_hex", ANIM_COLOR_DEFAULT_GARNISH)
+                g_shape = act.get("shape", ANIM_GARNISH_DEFAULT_SHAPE).lower()
+
+                if "leaf" in g_shape:
+                    garnish = Ellipse(
+                        width=ANIM_GARNISH_LEAF_WIDTH, height=ANIM_GARNISH_LEAF_HEIGHT,
+                        fill_color=g_col, fill_opacity=1, stroke_color=WHITE, stroke_width=ANIM_GARNISH_STROKE_WIDTH,
+                    )
+                elif "half circle" in g_shape:
+                    garnish = AnnularSector(
+                        inner_radius=ANIM_GARNISH_HALF_CIRCLE_INNER_RADIUS,
+                        outer_radius=ANIM_GARNISH_HALF_CIRCLE_OUTER_RADIUS,
+                        angle=PI,
+                        start_angle=0,
+                        fill_color=g_col,
+                        fill_opacity=1,
+                        stroke_color=WHITE,
+                        stroke_width=ANIM_GARNISH_STROKE_WIDTH,
+                    )
+                elif "traingle" in g_shape or "triangle" in g_shape:
+                    garnish = Triangle(
+                        fill_color=g_col, fill_opacity=1, stroke_color=WHITE, stroke_width=ANIM_GARNISH_STROKE_WIDTH
+                    ).scale(ANIM_GARNISH_TRIANGLE_SCALE)
+                elif "dashes" in g_shape:
+                    g1 = Dot(radius=ANIM_GARNISH_DASH_RADIUS, color=g_col)
+                    g2 = Dot(radius=ANIM_GARNISH_DASH_RADIUS, color=g_col).next_to(g1, RIGHT, buff=ANIM_GARNISH_DASH_BUFF)
+                    g3 = Dot(radius=ANIM_GARNISH_DASH_RADIUS, color=g_col).next_to(g2, RIGHT, buff=ANIM_GARNISH_DASH_BUFF)
+                    garnish = VGroup(g1, g2, g3)
+                elif "foam" in g_shape:
+                    garnish = RoundedRectangle(
+                        corner_radius=0.1,
+                        height=ANIM_GARNISH_FOAM_HEIGHT,
+                        width=dest_container.w_top * ANIM_GARNISH_FOAM_WIDTH_RATIO,
+                        fill_color=WHITE,
+                        fill_opacity=ANIM_GARNISH_FOAM_OPACITY,
+                        stroke_width=0,
+                    )
+                else:  # square swatch / peel
+                    garnish = Square(
+                        side_length=ANIM_SOLID_SQUARE_SIDE, fill_color=g_col, fill_opacity=1,
+                        stroke_color=WHITE, stroke_width=ANIM_GARNISH_STROKE_WIDTH,
+                    )
+
+                surf_y = dest_container.outline.get_bottom()[1] + vessels["serving_glass"].liquid_h + ANIM_GARNISH_SURFACE_Y_OFFSET
+                cx_dest = dest_container.outline.get_bottom()[0]
+
+                if placement == "rim":
+                    garnish.move_to(dest_container.get_top() + LEFT * (dest_container.w_top / 2) + UP * ANIM_GARNISH_SURFACE_Y_OFFSET)
+                elif placement == "side_of_ice":
+                    garnish.move_to(np.array([cx_dest + ANIM_GARNISH_SIDE_OFFSET, surf_y, 0]))
+                else:  # float
+                    garnish.move_to(np.array([cx_dest, surf_y, 0]))
+
+                garnish.set_z_index(ANIM_GARNISH_Z_INDEX)
+                self.play(FadeIn(garnish, shift=DOWN * 0.3), run_time=ANIM_GARNISH_FADE_RUN_TIME)
 
             self.wait(ANIM_DEFAULT_STEP_WAIT_S)
 
+        # Finale
+        self.play(FadeOut(step_title_mobj), FadeOut(step_inst_mobj), run_time=0.4)
         self.wait(ANIM_FINAL_WAIT_S)
