@@ -1,6 +1,8 @@
 import json
+import subprocess
 import threading
 from pathlib import Path
+from datetime import datetime
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from app.agent import ask_bartender
@@ -11,6 +13,7 @@ from app.config import (
     AGENT_INVALID_STEP_BY_STEP_SPEECH,
     AGENT_RECIPE_OPERATION,
     AGENT_RECIPE_REQUIRED_KEYS,
+    AGENT_RENDER_STARTED_TEXT,
     AGENT_RENDER_STATUS_TEXT,
     AGENT_STEP_BY_STEP_OPERATION,
     AGENT_STEP_BY_STEP_REQUIRED_KEYS,
@@ -18,6 +21,7 @@ from app.config import (
     MANIM_OUTPUT_DIR,
     MANIM_VIDEO_EXTENSION,
     STEP_BY_STEP_RERENDER_KEYWORDS,
+    STEP_BY_STEP_DEBUG_DIR,
 )
 from app.helpers.text import sanitize_cocktail_filename
 from app.threads.cancellable_worker import CancellableWorker
@@ -30,6 +34,7 @@ class Agent(QThread):
     show_status = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
     render_succeeded = pyqtSignal(str)
+    video_render_started = pyqtSignal(str)
     recipe_ready = pyqtSignal(dict)
     session_id_updated = pyqtSignal(str)
 
@@ -40,6 +45,8 @@ class Agent(QThread):
         self.message = message
         self.session_id = session_id
         self._paused = threading.Event()
+        self._interrupted = threading.Event()
+        self._cli_process: subprocess.Popen | None = None
         self._child_workers: list[CancellableWorker] = []
         self.manim_worker = None
         self._scan_popup = None
@@ -52,11 +59,18 @@ class Agent(QThread):
         self.thinking_started.emit()
 
         try:
-            envelope = ask_bartender(self.message, self.session_id)
+            envelope = ask_bartender(
+                self.message, self.session_id, on_process_started=self._on_cli_process_started
+            )
         except Exception as exc:
+            if self._interrupted.is_set():
+                return
             self.error_occurred.emit(str(exc))
             self.show_reply.emit(AGENT_ERROR_SPEECH)
             self.thinking_ended.emit()
+            return
+
+        if self._interrupted.is_set():
             return
 
         current_session_id = envelope.get("session_id") or self.session_id
@@ -64,19 +78,28 @@ class Agent(QThread):
         if envelope.get("operation") == AGENT_CLARIFY_OPERATION:
             self.scan_image()
 
-            if self._scan_result_path is None:
+            if self._interrupted.is_set() or self._scan_result_path is None:
                 return
 
             self._active_scan_path = self._scan_result_path
             try:
-                envelope = ask_bartender(self._scan_result_path, current_session_id)
+                envelope = ask_bartender(
+                    self._scan_result_path,
+                    current_session_id,
+                    on_process_started=self._on_cli_process_started,
+                )
             except Exception as exc:
+                if self._interrupted.is_set():
+                    return
                 self.error_occurred.emit(str(exc))
                 self.show_reply.emit(AGENT_ERROR_SPEECH)
                 self.thinking_ended.emit()
                 return
             finally:
                 self._cleanup_scan_file()
+
+            if self._interrupted.is_set():
+                return
 
             current_session_id = envelope.get("session_id") or current_session_id
 
@@ -112,6 +135,10 @@ class Agent(QThread):
                     self.show_status.emit(AGENT_RENDER_STATUS_TEXT)
                     self.render_succeeded.emit(str(existing_path))
                 else:
+                    self._dump_step_by_step_debug(data)
+                    cocktail_name = data.get("name", "Cocktail")
+                    self.video_render_started.emit(cocktail_name)
+                    self.show_status.emit(AGENT_RENDER_STARTED_TEXT)
                     self.generate_and_show_from_string(json.dumps(data))
         else:
             self.thinking_ended.emit()
@@ -119,6 +146,19 @@ class Agent(QThread):
 
         if current_session_id:
             self.session_id_updated.emit(current_session_id)
+
+    def _on_cli_process_started(self, proc: subprocess.Popen) -> None:
+        self._cli_process = proc
+
+    def interrupt(self) -> None:
+        self._interrupted.set()
+        self.stop_active_worker()
+        proc = self._cli_process
+        if proc is not None and proc.poll() is None:
+            try:
+                proc.kill()
+            except OSError:
+                pass
 
     def _existing_render_path(self, cocktail_name: str) -> Path | None:
         filename = sanitize_cocktail_filename(cocktail_name)
@@ -168,6 +208,17 @@ class Agent(QThread):
             Path(path).unlink(missing_ok=True)
         except OSError as exc:
             print(f"{LOG_PREFIX_ERROR}: could not delete uploaded scan {path}: {exc}")
+
+    def _dump_step_by_step_debug(self, data: dict) -> None:
+        debug_dir = Path(STEP_BY_STEP_DEBUG_DIR)
+        filename = sanitize_cocktail_filename(data.get("name", "Cocktail"))
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        path = debug_dir / f"{filename}_{timestamp}.json"
+        try:
+            debug_dir.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except OSError as exc:
+            print(f"{LOG_PREFIX_ERROR}: could not write step-by-step debug json {path}: {exc}")
 
     def _on_scan_failure(self, error_msg: str):
         output_messgae = f"Scanning failed: {error_msg}"

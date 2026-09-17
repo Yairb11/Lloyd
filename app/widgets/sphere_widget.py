@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import QWidget
 from app.config import (
     SPHERE_BASE_RADIUS,
     SPHERE_COLOR_LISTENING,
+    SPHERE_COLOR_RENDERING,
     SPHERE_COLOR_SPEAKING,
     SPHERE_COLOR_START,
     SPHERE_COLOR_THINKING,
@@ -46,6 +47,7 @@ class SphereMode:
     LISTENING = "listening"
     THINKING = "thinking"
     SPEAKING = "speaking"
+    RENDERING = "rendering"
 
 
 class SphereWidget(QWidget):
@@ -143,6 +145,14 @@ class SphereWidget(QWidget):
         self.set_color(SPHERE_COLOR_THINKING)
         self._animate_radius_to(SPHERE_BASE_RADIUS)
 
+    def enter_rendering(self) -> None:
+        self._mode = SphereMode.RENDERING
+        self._pulse_speed = SPHERE_PULSE_SPEED * SPHERE_THINKING_PULSE_SPEED_MULTIPLIER
+        self._pulse_amplitude = SPHERE_PULSE_AMPLITUDE * SPHERE_THINKING_PULSE_AMPLITUDE_MULTIPLIER
+        self._orbit_angle = 0.0
+        self.set_color(SPHERE_COLOR_RENDERING)
+        self._animate_radius_to(SPHERE_BASE_RADIUS)
+
     def enter_speaking(self) -> None:
         self._mode = SphereMode.SPEAKING
         self.set_color(SPHERE_COLOR_SPEAKING)
@@ -172,7 +182,7 @@ class SphereWidget(QWidget):
             self._hue_phase = (self._hue_phase + SPHERE_HUE_CYCLE_SPEED * step) % 360
             self._color = QColor.fromHsv(int(self._hue_phase), SPHERE_IDLE_HUE_SATURATION, SPHERE_IDLE_HUE_VALUE)
 
-        if self._mode == SphereMode.THINKING:
+        if self._mode in (SphereMode.THINKING, SphereMode.RENDERING):
             self._orbit_angle = (self._orbit_angle + SPHERE_THINKING_ORBIT_SPEED * step) % 360
 
         if self._mode == SphereMode.SPEAKING:
@@ -217,7 +227,7 @@ class SphereWidget(QWidget):
             int(radius * 2),
         )
 
-        if self._mode == SphereMode.THINKING:
+        if self._mode in (SphereMode.THINKING, SphereMode.RENDERING):
             self._paint_orbit_highlight(painter, center_x, center_y, radius)
 
     def _paint_orbit_highlight(self, painter: QPainter, center_x: float, center_y: float, radius: float) -> None:

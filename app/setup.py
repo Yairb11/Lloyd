@@ -76,6 +76,15 @@ def shutdown_mcp_server() -> None:
     _mcp_process = None
 
 
+def is_mcp_server_alive() -> bool:
+    """True while the MCP server terminal is still up, whether this process
+    spawned it (checked via the process handle) or it was already running
+    when this process started (checked via the health-check socket)."""
+    if _mcp_process is not None:
+        return _mcp_process.poll() is None
+    return _is_mcp_server_reachable()
+
+
 class _LoadingIndicator:
     def __init__(self, text: str = STARTUP_LOADING_TEXT, interval_s: float = STARTUP_LOADING_INTERVAL_S) -> None:
         self._text = text

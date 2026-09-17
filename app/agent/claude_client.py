@@ -1,6 +1,7 @@
 import json
 import subprocess
 from pathlib import Path
+from typing import Callable
 
 from app.config import (
     AGENT_CLI_COMMAND,
@@ -30,7 +31,11 @@ def _strip_json_fences(raw: str) -> str:
     return raw.strip()
 
 
-def ask_bartender(message: str, session_id: str | None = None) -> dict:
+def ask_bartender(
+    message: str,
+    session_id: str | None = None,
+    on_process_started: Callable[[subprocess.Popen], None] | None = None,
+) -> dict:
     cmd = [
         AGENT_CLI_COMMAND, "-p", message,
         "--append-system-prompt", _SYSTEM_PROMPT,
@@ -41,14 +46,24 @@ def ask_bartender(message: str, session_id: str | None = None) -> dict:
     if session_id:
         cmd += ["--resume", session_id]
 
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=AGENT_CLI_TIMEOUT_S)
-    if proc.returncode != 0:
-        raise RuntimeError(f"claude CLI failed:\n{proc.stderr}")
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if on_process_started is not None:
+        on_process_started(proc)
 
     try:
-        outer = json.loads(proc.stdout)
+        stdout, stderr = proc.communicate(timeout=AGENT_CLI_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.communicate()
+        raise RuntimeError("claude CLI timed out")
+
+    if proc.returncode != 0:
+        raise RuntimeError(f"claude CLI failed:\n{stderr}")
+
+    try:
+        outer = json.loads(stdout)
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"claude CLI returned invalid JSON: {exc}\n{proc.stdout}") from exc
+        raise RuntimeError(f"claude CLI returned invalid JSON: {exc}\n{stdout}") from exc
 
     raw = _strip_json_fences(outer.get("result", ""))
     try:

@@ -114,6 +114,14 @@ class TopLeftVideoWidget(QFrame):
             self.player.setPosition(0)
             self.player.play()
 
+    def show_preparing(self, title: str) -> None:
+        self._active_video_path = ""
+        self.player.stop()
+        self.player.setSource(QUrl())
+        self.title_label.setText(title[:VIDEO_TITLE_MAX_LENGTH].upper())
+        self.show()
+        self.raise_()
+
     def play_video(self, file_path: str, title: str = VIDEO_DEFAULT_TITLE):
         self._active_video_path = file_path
         self.title_label.setText(title[:VIDEO_TITLE_MAX_LENGTH].upper())

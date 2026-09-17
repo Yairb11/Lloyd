@@ -6,6 +6,7 @@ import time
 import numpy as np
 import sounddevice as sd
 import vosk
+from faster_whisper import WhisperModel
 from PyQt6.QtCore import QThread, pyqtSignal
 from thefuzz import fuzz
 
@@ -13,6 +14,7 @@ from app.config import (
     VOICE_AUDIO_DTYPE,
     VOICE_BLOCK_SIZE_FRAMES,
     VOICE_COMMAND_MAX_DURATION_S,
+    VOICE_COMMAND_MODEL_WARMUP_SECONDS,
     VOICE_COMMAND_SILENCE_TIMEOUT_S,
     VOICE_COMMAND_START_TIMEOUT_S,
     VOICE_MSG_MODEL_MISSING,
@@ -21,18 +23,31 @@ from app.config import (
     VOICE_QUEUE_POLL_TIMEOUT_S,
     VOICE_SAMPLE_RATE_HZ,
     VOICE_SILENCE_RMS_THRESHOLD,
-    VOICE_VOSK_COMMAND_MODEL_DIR,
+    VOICE_STOP_PHRASE,
+    VOICE_STOP_PHRASE_MATCH_THRESHOLD,
+    VOICE_STOP_KEYWORD_MAX_WORDS,
     VOICE_VOSK_WAKE_MODEL_DIR,
-    VOICE_WAKE_MATCH_THRESHOLD,
+    VOICE_WAKE_KEYWORD,
+    VOICE_WAKE_KEYWORD_MATCH_THRESHOLD,
+    VOICE_WAKE_KEYWORD_MAX_WORDS,
+    VOICE_WAKE_PHRASE_MATCH_THRESHOLD,
     VOICE_WAKE_WORDS,
+    VOICE_WHISPER_COMPUTE_TYPE,
+    VOICE_WHISPER_CPU_THREADS,
+    VOICE_WHISPER_DEVICE,
+    VOICE_WHISPER_DOWNLOAD_ROOT,
+    VOICE_WHISPER_LANGUAGE,
+    VOICE_WHISPER_MODEL_SIZE,
 )
 
 class VoiceListener(QThread):
-
     wake_word_detected = pyqtSignal(str)
+    stop_word_detected = pyqtSignal()
     speech_started = pyqtSignal()
     speech_ended = pyqtSignal()
     error_occurred = pyqtSignal(str)
+    partial_transcript = pyqtSignal(str)
+    listener_ready = pyqtSignal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -46,24 +61,79 @@ class VoiceListener(QThread):
         if not os.path.isdir(VOICE_VOSK_WAKE_MODEL_DIR):
             self.error_occurred.emit(f"{VOICE_MSG_MODEL_MISSING} (wake model: {VOICE_VOSK_WAKE_MODEL_DIR})")
             return
-        if not os.path.isdir(VOICE_VOSK_COMMAND_MODEL_DIR):
-            self.error_occurred.emit(f"{VOICE_MSG_MODEL_MISSING} (command model: {VOICE_VOSK_COMMAND_MODEL_DIR})")
-            return
 
         vosk.SetLogLevel(-1)
+
+        # Open the microphone immediately so audio starts buffering right
+        # away, before either model has loaded.
         try:
-            wake_model = vosk.Model(VOICE_VOSK_WAKE_MODEL_DIR)
-            command_model = vosk.Model(VOICE_VOSK_COMMAND_MODEL_DIR)
+            self._ensure_stream_open()
         except Exception as exc:
-            self.error_occurred.emit(f"{VOICE_MSG_MODEL_MISSING} ({exc})")
+            self.error_occurred.emit(f"Microphone error: {exc}")
             return
+
+        try:
+            device_info = sd.query_devices(kind="input")
+            self.error_occurred.emit(f"Using input device: {device_info.get('name')!r}")
+        except Exception as exc:
+            self.error_occurred.emit(f"Could not query input device: {exc}")
+
+        # Load both models in parallel to minimize total setup time, but
+        # do NOT start listening for the wake word until both are fully
+        # ready - including paying the command model's one-time first-
+        # decode warm-up cost here, not on the user's first real command.
+        wake_result: dict[str, object] = {}
+        command_result: dict[str, object] = {}
+
+        def _load_wake_model() -> None:
+            try:
+                wake_result["model"] = vosk.Model(VOICE_VOSK_WAKE_MODEL_DIR)
+            except Exception as exc:
+                wake_result["error"] = exc
+
+        def _load_and_warm_command_model() -> None:
+            try:
+                model = WhisperModel(
+                    VOICE_WHISPER_MODEL_SIZE,
+                    device=VOICE_WHISPER_DEVICE,
+                    compute_type=VOICE_WHISPER_COMPUTE_TYPE,
+                    cpu_threads=VOICE_WHISPER_CPU_THREADS,
+                    download_root=VOICE_WHISPER_DOWNLOAD_ROOT,
+                )
+                silence = np.zeros(
+                    int(VOICE_SAMPLE_RATE_HZ * VOICE_COMMAND_MODEL_WARMUP_SECONDS), dtype=np.float32
+                )
+                segments, _ = model.transcribe(silence, language=VOICE_WHISPER_LANGUAGE)
+                list(segments)  # force decode now, not on first real command
+                command_result["model"] = model
+            except Exception as exc:
+                command_result["error"] = exc
+
+        wake_thread = threading.Thread(target=_load_wake_model, daemon=True)
+        command_thread = threading.Thread(target=_load_and_warm_command_model, daemon=True)
+        wake_thread.start()
+        command_thread.start()
+        wake_thread.join()
+        command_thread.join()
+
+        wake_model = wake_result.get("model")
+        if wake_model is None:
+            self.error_occurred.emit(f"{VOICE_MSG_MODEL_MISSING} ({wake_result.get('error')})")
+            return
+
+        command_model = command_result.get("model")
+        if command_model is None:
+            self.error_occurred.emit(f"{VOICE_MSG_MODEL_MISSING} ({command_result.get('error')})")
+            return
+
+        self.listener_ready.emit()
 
         try:
             self._run_loop(wake_model, command_model)
         finally:
             self._close_stream()
 
-    def _run_loop(self, wake_model: vosk.Model, command_model: vosk.Model) -> None:
+    def _run_loop(self, wake_model: vosk.Model, command_model: WhisperModel) -> None:
         wake_rec = self._new_wake_recognizer(wake_model)
 
         while not self.isInterruptionRequested():
@@ -79,9 +149,6 @@ class VoiceListener(QThread):
             except queue.Empty:
                 continue
 
-            if self._suspended.is_set():
-                continue
-
             try:
                 if wake_rec.AcceptWaveform(chunk):
                     text = json.loads(wake_rec.Result()).get("text", "")
@@ -90,6 +157,20 @@ class VoiceListener(QThread):
             except Exception as exc:
                 self.error_occurred.emit(f"Wake-word engine error: {exc}")
                 continue
+
+            # While suspended (Lloyd is thinking/speaking/rendering), don't
+            # run full wake-word detection - just listen for the bare word
+            # "stop" so the user can barge in without saying "hey lloyd"
+            # first. This is the only audio processing that happens while
+            # suspended.
+            if self._suspended.is_set():
+                if self._matches_stop_word(text):
+                    self.stop_word_detected.emit()
+                    wake_rec = self._new_wake_recognizer(wake_model)
+                continue
+
+            if text.strip():
+                self.partial_transcript.emit(text)
 
             if not self._matches_wake_word(text):
                 continue
@@ -121,16 +202,43 @@ class VoiceListener(QThread):
         if not normalized:
             return False
 
+        words = normalized.split()
+
+        # Full-phrase match against every configured wake phrase, including
+        # known phonetic-mishear variants (e.g. "hey floyd", "hey boyd").
         for phrase in VOICE_WAKE_WORDS:
-            if len(normalized.split()) < len(phrase.split()):
+            if len(words) < len(phrase.split()):
                 continue
-            if fuzz.partial_ratio(phrase, normalized) >= VOICE_WAKE_MATCH_THRESHOLD:
+            if fuzz.partial_ratio(phrase, normalized) >= VOICE_WAKE_PHRASE_MATCH_THRESHOLD:
                 return True
+
+        # Bare-keyword fallback: the small wake model frequently drops or
+        # clips the short, low-energy "hey" and only ever transcribes
+        # "lloyd" (optionally preceded by a filler word). A phrase-level
+        # check can never see these, so fuzzy-match each word of a short
+        # utterance directly against the keyword using whole-string ratio
+        # (not partial_ratio, which over-matches short strings — e.g. bare
+        # "hey" scores 100 against "hey lloyd" via partial_ratio) at a
+        # stricter, separately tuned bar.
+        if 0 < len(words) <= VOICE_WAKE_KEYWORD_MAX_WORDS:
+            for word in words:
+                if fuzz.ratio(VOICE_WAKE_KEYWORD, word) >= VOICE_WAKE_KEYWORD_MATCH_THRESHOLD:
+                    return True
+
         return False
 
-    def _capture_command(self, command_model: vosk.Model) -> str:
-        recognizer = vosk.KaldiRecognizer(command_model, VOICE_SAMPLE_RATE_HZ)
-        recognizer.SetWords(False)
+    def _matches_stop_word(self, text: str) -> bool:
+        normalized = text.strip().lower()
+        if not normalized:
+            return False
+
+        if len(normalized.split()) < len(VOICE_STOP_PHRASE.split()):
+            return False
+
+        return fuzz.partial_ratio(VOICE_STOP_PHRASE, normalized) >= VOICE_STOP_PHRASE_MATCH_THRESHOLD
+
+    def _capture_command(self, command_model: WhisperModel) -> str:
+        audio_buffer = bytearray()
 
         start_time = time.monotonic()
         started_talking = False
@@ -151,7 +259,7 @@ class VoiceListener(QThread):
             except queue.Empty:
                 continue
 
-            recognizer.AcceptWaveform(chunk)
+            audio_buffer.extend(chunk)
 
             samples = np.frombuffer(chunk, dtype=np.int16)
             rms = (
@@ -169,11 +277,12 @@ class VoiceListener(QThread):
                 elif time.monotonic() - silence_started_at >= VOICE_COMMAND_SILENCE_TIMEOUT_S:
                     break
 
-        try:
-            result = json.loads(recognizer.FinalResult())
-        except json.JSONDecodeError:
+        if not audio_buffer:
             return ""
-        return result.get("text", "").strip()
+
+        audio_np = np.frombuffer(bytes(audio_buffer), dtype=np.int16).astype(np.float32) / 32768.0
+        segments, _ = command_model.transcribe(audio_np, language=VOICE_WHISPER_LANGUAGE)
+        return " ".join(segment.text.strip() for segment in segments).strip()
 
     def _ensure_stream_open(self) -> None:
         if self._stream is not None:

@@ -1,7 +1,11 @@
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QHBoxLayout, QLineEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget
+from thefuzz import fuzz
 
 from app.config import (
+    CHAT_CLEAR_COMMAND_TEXT,
+    CHAT_CLEAR_VOICE_MATCH_THRESHOLD,
+    CHAT_CLEAR_VOICE_PHRASE,
     CHAT_HISTORY_SPACING,
     CHAT_INPUT_PLACEHOLDER,
     CHAT_INPUT_ROW_SPACING,
@@ -31,6 +35,7 @@ class ChatPanel(QWidget):
         on_speaking_amplitude=None,
         on_render_success=None,
         on_recipe_ready=None,
+        on_video_render_started=None,
         parent: QWidget | None = None
     ) -> None:
 
@@ -45,6 +50,7 @@ class ChatPanel(QWidget):
         self.on_speaking_amplitude = on_speaking_amplitude
         self.on_render_success = on_render_success
         self.on_recipe_ready = on_recipe_ready
+        self.on_video_render_started = on_video_render_started
         self.agent = None
         self._busy = False
         self._speaking = False
@@ -92,7 +98,7 @@ class ChatPanel(QWidget):
 
     def _on_send_button_clicked(self) -> None:
         if self._busy:
-            self._stop_active_request()
+            self.interrupt()
         else:
             self._on_send()
 
@@ -105,9 +111,13 @@ class ChatPanel(QWidget):
         self.input.clear()
         self.submit_message(message)
 
-    def submit_message(self, message: str) -> None:
+    def submit_message(self, message: str, *, via_voice: bool = False) -> None:
         message = message.strip()
         if not message or self._busy:
+            return
+
+        if self._is_clear_chat_command(message, via_voice=via_voice):
+            self._clear_chat()
             return
 
         self._append_bubble(message, is_user=True)
@@ -118,21 +128,40 @@ class ChatPanel(QWidget):
         self.agent.thinking_started.connect(self._on_thinking_started)
         self.agent.thinking_ended.connect(self._on_thinking_ended)
         self.agent.render_succeeded.connect(self._on_render_succeeded)
+        self.agent.video_render_started.connect(self._on_video_render_started)
         self.agent.recipe_ready.connect(self._on_recipe_ready)
         self.agent.session_id_updated.connect(self._on_session_id_updated)
 
         self._set_busy(True)
         self.agent.start()
 
-    def _stop_active_request(self) -> None:
-        if self.agent is not None:
-            self.agent.stop_active_worker()
-            self.agent = None
+    def _is_clear_chat_command(self, message: str, *, via_voice: bool) -> bool:
+        normalized = message.lower()
+        if via_voice:
+            return fuzz.ratio(CHAT_CLEAR_VOICE_PHRASE, normalized) >= CHAT_CLEAR_VOICE_MATCH_THRESHOLD
+        return normalized == CHAT_CLEAR_COMMAND_TEXT
 
+    def _clear_chat(self) -> None:
+        while self.history_layout.count() > 1:
+            item = self.history_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        self._session_id = None
+
+    def interrupt(self) -> None:
+        if self.agent is not None:
+            agent = self.agent
+            self.agent = None
+            agent.finished.connect(agent.deleteLater)
+            agent.interrupt()
+
+        self.lloyd_speaker.stop()
         self._hide_typing_indicator()
         self._set_busy(False)
         if self.on_thinking_ended is not None:
             self.on_thinking_ended()
+
 
     def set_speech_muted(self, muted: bool) -> None:
         self._speech_muted = muted
@@ -231,6 +260,12 @@ class ChatPanel(QWidget):
             return
         if self.on_render_success is not None:
             self.on_render_success(output_mp4_path)
+
+    def _on_video_render_started(self, cocktail_name: str) -> None:
+        if self.sender() is not self.agent:
+            return
+        if self.on_video_render_started is not None:
+            self.on_video_render_started(cocktail_name)
 
     def _on_recipe_ready(self, data: dict) -> None:
         if self.sender() is not self.agent:

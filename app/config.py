@@ -103,6 +103,10 @@ CHAT_STOP_BUTTON_TEXT: str = "Stop"
 OBJECT_NAME_SEND_BUTTON: str = "sendButton"
 COLOR_STOP_ACTIVE: str = "#ff5c5c"
 
+CHAT_CLEAR_COMMAND_TEXT: str = "/clear"
+CHAT_CLEAR_VOICE_PHRASE: str = "clean the chat"
+CHAT_CLEAR_VOICE_MATCH_THRESHOLD: int = 85
+
 # SCROLLBAR
 COLOR_SCROLLBAR_TRACK: str = "#1f1f22"
 COLOR_SCROLLBAR_HANDLE: str = "#6e6e74"
@@ -157,6 +161,7 @@ SPHERE_ORBIT_HIGHLIGHT_LIGHTEN: int = 180
 SPHERE_COLOR_LISTENING: str = "#2f8fff"
 SPHERE_COLOR_THINKING: str = "#00ff2a"
 SPHERE_COLOR_SPEAKING: str = "#ffffff"
+SPHERE_COLOR_RENDERING: str = "#ff9100"
 
 SPHERE_LISTENING_GROWTH: float = 30.0
 
@@ -224,17 +229,37 @@ LOG_PREFIX_AGENT: str = "[Lloyd agent]"
 LOG_PREFIX_ERROR: str = "[Lloyd Error]"
 
 # VOICE INPUT
-VOICE_WAKE_WORDS: tuple[str, ...] = ("hey lloyd",)
+VOICE_WAKE_WORDS: tuple[str, ...] = (
+    "hey lloyd",
+    "hey floyd",
+    "hey loyd",
+    "hey boyd",
+    "hi lloyd",
+    "a lloyd",
+)
+VOICE_WAKE_KEYWORD: str = "lloyd"
 VOICE_RECOGNITION_LANGUAGE: str = "en-US"
+VOICE_COMMAND_MODEL_WARMUP_SECONDS: float = 1.0
 
 VOICE_VOSK_WAKE_MODEL_DIR: str = "models/vosk-model-small-en-us-0.15"
-VOICE_VOSK_COMMAND_MODEL_DIR: str = "models/vosk-model-en-us-0.22"
+
+VOICE_WHISPER_MODEL_SIZE: str = "small"
+VOICE_WHISPER_DEVICE: str = "cpu"
+VOICE_WHISPER_COMPUTE_TYPE: str = "int8"
+VOICE_WHISPER_DOWNLOAD_ROOT: str = "models/whisper"
+VOICE_WHISPER_LANGUAGE: str = "en"
+VOICE_WHISPER_CPU_THREADS: int = 4
 
 VOICE_SAMPLE_RATE_HZ: int = 16000
 VOICE_AUDIO_DTYPE: str = "int16"
 VOICE_BLOCK_SIZE_FRAMES: int = 2048
 
-VOICE_WAKE_MATCH_THRESHOLD: int = 85
+VOICE_WAKE_PHRASE_MATCH_THRESHOLD: int = 85
+VOICE_WAKE_KEYWORD_MATCH_THRESHOLD: int = 80
+VOICE_WAKE_KEYWORD_MAX_WORDS: int = 2
+VOICE_STOP_PHRASE: str = "lloyd stop"
+VOICE_STOP_PHRASE_MATCH_THRESHOLD: int = 85
+VOICE_STOP_KEYWORD_MAX_WORDS: int = 2
 
 VOICE_COMMAND_START_TIMEOUT_S: float = 5.0
 VOICE_COMMAND_SILENCE_TIMEOUT_S: float = 1.2
@@ -402,6 +427,7 @@ MCP_CONFIG_PATH: str = "runtime/mcp_config.json"
 MCP_HEALTHCHECK_TIMEOUT_S: float = 20.0
 MCP_HEALTHCHECK_POLL_INTERVAL_S: float = 0.5
 MCP_HEALTHCHECK_CONNECT_TIMEOUT_S: float = 1.0
+MCP_WATCHDOG_POLL_INTERVAL_S: float = 3.0
 LOG_PREFIX_MCP: str = "[Lloyd MCP]"
 
 # AGENT
@@ -417,10 +443,12 @@ AGENT_STEP_BY_STEP_OPERATION: str = "step_by_step"
 AGENT_STEP_BY_STEP_REQUIRED_KEYS: tuple[str, ...] = (
     "name", "glass_type", "ingredients", "steps",
 )
+STEP_BY_STEP_DEBUG_DIR: str = "runtime/step_by_step_debug"
 AGENT_INVALID_STEP_BY_STEP_SPEECH: str = "I have the recipe, but I couldn't prepare the animation for it."
 AGENT_ERROR_SPEECH: str = "Something went wrong on my end -- would you like to try that again?"
 AGENT_INVALID_RECIPE_SPEECH: str = "I have the recipe, but couldn't prepare the display card for it."
 AGENT_RENDER_STATUS_TEXT: str = "Render completed"
+AGENT_RENDER_STARTED_TEXT: str = "Creating your cocktail video..."
 STEP_BY_STEP_RERENDER_KEYWORDS: tuple[str, ...] = (
     "rerender", "re-render", "renew", "regenerate", "redo", "recreate",
 )

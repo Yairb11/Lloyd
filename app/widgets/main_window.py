@@ -28,6 +28,7 @@ from app.config import (
     WINDOW_MIN_WIDTH,
     WINDOW_TITLE,
 )
+from app.setup import shutdown_mcp_server
 from app.theme import build_stylesheet
 from app.threads import VoiceListener
 from app.widgets.canvas_panel import CanvasPanel
@@ -47,6 +48,11 @@ class MainWindow(QMainWindow):
         self._is_fullscreen: bool = False
         self._dark_titlebar_applied: bool = False
 
+        self._agent_busy: bool = False
+        self._is_rendering: bool = False
+        self._tts_speaking: bool = False
+        self._voice_ready: bool = False
+
         central = QWidget(self)
         layout = QHBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -64,6 +70,7 @@ class MainWindow(QMainWindow):
             on_speaking_amplitude=self._on_speaking_amplitude,
             on_render_success=self._on_render_success,
             on_recipe_ready=self._on_recipe_ready,
+            on_video_render_started=self._on_video_render_started,
             parent=self.splitter
         )
         self.splitter.addWidget(self.canvas_panel)
@@ -144,7 +151,9 @@ class MainWindow(QMainWindow):
 
     def _setup_voice_listener(self) -> None:
         self.voice_listener = VoiceListener(self)
+        self.voice_listener.listener_ready.connect(self._on_listener_ready)
         self.voice_listener.wake_word_detected.connect(self._on_wake_word_detected)
+        self.voice_listener.stop_word_detected.connect(self._on_stop_word_detected)
         self.voice_listener.error_occurred.connect(self._on_voice_error)
         self.voice_listener.speech_started.connect(self._on_speech_started)
         self.voice_listener.speech_ended.connect(self._on_speech_ended)
@@ -153,10 +162,20 @@ class MainWindow(QMainWindow):
         self.canvas_panel.mic_toggle_button.toggled.connect(self._on_mic_toggle)
         self._on_mic_toggle(True)
 
+        self._refresh_busy_visuals()
         self.voice_listener.start()
 
+    def _on_listener_ready(self) -> None:
+        self._voice_ready = True
+        self._refresh_busy_visuals()
+
     def _on_wake_word_detected(self, text: str) -> None:
-        self.chat_panel.submit_message(text)
+        self.chat_panel.submit_message(text, via_voice=True)
+
+    def _on_stop_word_detected(self) -> None:
+        if not (self._agent_busy or self._tts_speaking):
+            return
+        self.chat_panel.interrupt()
 
     def _on_speech_started(self):
         self.canvas_panel.sphere.enter_listening()
@@ -164,19 +183,47 @@ class MainWindow(QMainWindow):
     def _on_speech_ended(self):
         self.canvas_panel.sphere.enter_idle()
 
+    def _refresh_busy_visuals(self) -> None:
+        if not self._voice_ready:
+            self.canvas_panel.sphere.enter_thinking()
+            return
+
+        if self._agent_busy:
+            if self._is_rendering:
+                self.canvas_panel.sphere.enter_rendering()
+            else:
+                self.canvas_panel.sphere.enter_thinking()
+        elif self._tts_speaking:
+            self.canvas_panel.sphere.enter_speaking()
+        else:
+            self.canvas_panel.sphere.enter_idle()
+
+        if self._agent_busy or self._tts_speaking:
+            self.voice_listener.suspend()
+        else:
+            self.voice_listener.unsuspend()
+
     def _on_thinking_started(self):
-        self.canvas_panel.sphere.enter_thinking()
-        self.voice_listener.suspend()
+        self._agent_busy = True
+        self._is_rendering = False
+        self._refresh_busy_visuals()
 
     def _on_thinking_ended(self):
-        self.canvas_panel.sphere.enter_idle()
-        self.voice_listener.unsuspend()
-        
+        self._agent_busy = False
+        self._is_rendering = False
+        self._refresh_busy_visuals()
+
     def _on_speaking_amplitude(self, level: float) -> None:
         self.canvas_panel.sphere.update_speaking_amplitude(level)
 
     def _on_render_success(self, output_mp4_path: str):
         self.video_preview.play_video(output_mp4_path, title=Path(output_mp4_path).stem)
+        self._raise_hud_widgets()
+
+    def _on_video_render_started(self, cocktail_name: str):
+        self._is_rendering = True
+        self.video_preview.show_preparing(f"Creating {cocktail_name}...")
+        self._refresh_busy_visuals()
         self._raise_hud_widgets()
 
     def _on_recipe_ready(self, data: dict):
@@ -185,12 +232,12 @@ class MainWindow(QMainWindow):
         self._raise_hud_widgets()
 
     def _on_speaking_started(self):
-        self.canvas_panel.sphere.enter_speaking()
-        self.voice_listener.suspend()
+        self._tts_speaking = True
+        self._refresh_busy_visuals()
 
     def _on_speaking_ended(self):
-        self.canvas_panel.sphere.enter_idle()
-        self.voice_listener.unsuspend()
+        self._tts_speaking = False
+        self._refresh_busy_visuals()
 
     def _on_mic_toggle(self, muted: bool) -> None:
         button = self.canvas_panel.mic_toggle_button
@@ -229,4 +276,7 @@ class MainWindow(QMainWindow):
         settings = QSettings(ORG_NAME, APP_NAME)
         settings.setValue(SETTINGS_GEOMETRY_KEY, self.saveGeometry())
         settings.setValue(SETTINGS_SPLITTER_STATE_KEY, self.splitter.saveState())
+
+        shutdown_mcp_server()
+
         super().closeEvent(event)
