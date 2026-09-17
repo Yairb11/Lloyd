@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import QPushButton, QVBoxLayout, QWidget
 
 from app.config import (
-    MIC_BUTTON_LISTENING_TEXT,
+    MIC_BUTTON_LOADING_TEXT,
     MUTE_BUTTON_ICON_MUTED,
     MUTE_BUTTON_ICON_UNMUTED,
     MUTE_BUTTON_MARGIN,
@@ -24,9 +24,10 @@ class CanvasPanel(QWidget):
         self.sphere = SphereWidget(self)
         layout.addWidget(self.sphere)
 
-        self.mic_toggle_button = QPushButton(MIC_BUTTON_LISTENING_TEXT, self)
+        self.mic_toggle_button = QPushButton(MIC_BUTTON_LOADING_TEXT, self)
         self.mic_toggle_button.setObjectName(OBJECT_NAME_MIC_TOGGLE_BUTTON)
         self.mic_toggle_button.setCheckable(True)
+        self.mic_toggle_button.setEnabled(False)
         layout.addWidget(self.mic_toggle_button)
 
         self.mute_button = QPushButton(MUTE_BUTTON_ICON_UNMUTED, self)

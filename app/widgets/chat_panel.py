@@ -30,6 +30,7 @@ class ChatPanel(QWidget):
         self,
         on_thinking_started=None,
         on_thinking_ended=None,
+        on_voice_transcription_ended=None,
         on_speaking_started=None,
         on_speaking_ended=None,
         on_speaking_amplitude=None,
@@ -45,6 +46,7 @@ class ChatPanel(QWidget):
 
         self.on_thinking_started = on_thinking_started
         self.on_thinking_ended = on_thinking_ended
+        self.on_voice_transcription_ended = on_voice_transcription_ended
         self.on_speaking_started = on_speaking_started
         self.on_speaking_ended = on_speaking_ended
         self.on_speaking_amplitude = on_speaking_amplitude
@@ -54,6 +56,7 @@ class ChatPanel(QWidget):
         self.agent = None
         self._busy = False
         self._speaking = False
+        self._voice_transcribing = False
         self._session_id: str | None = None
         self.lloyd_speaker = LloydSpeaker(self)
         self.lloyd_speaker.speech_started.connect(self._on_speech_started)
@@ -61,6 +64,7 @@ class ChatPanel(QWidget):
         self.lloyd_speaker.amplitude_changed.connect(self._on_speaking_amplitude)
         self._speech_muted = False
         self._typing_indicator: TypingIndicator | None = None
+        self._voice_transcribing_indicator: TypingIndicator | None = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(CHAT_PANEL_MARGIN, CHAT_PANEL_MARGIN, CHAT_PANEL_MARGIN, CHAT_PANEL_MARGIN)
@@ -149,7 +153,35 @@ class ChatPanel(QWidget):
                 widget.deleteLater()
         self._session_id = None
 
+    def start_voice_transcription(self) -> None:
+        if self._busy:
+            return
+        self._voice_transcribing = True
+        self._set_busy(True)
+        self._show_voice_transcribing_indicator()
+
+    def finish_voice_transcription(self, text: str) -> None:
+        if not self._voice_transcribing:
+            return
+        self._voice_transcribing = False
+        self._hide_voice_transcribing_indicator()
+        self._set_busy(False)
+        if self.on_voice_transcription_ended is not None:
+            self.on_voice_transcription_ended()
+
+        text = text.strip()
+        if text:
+            self.submit_message(text, via_voice=True)
+
     def interrupt(self) -> None:
+        if self._voice_transcribing:
+            self._voice_transcribing = False
+            self._hide_voice_transcribing_indicator()
+            self._set_busy(False)
+            if self.on_voice_transcription_ended is not None:
+                self.on_voice_transcription_ended()
+            return
+
         if self.agent is not None:
             agent = self.agent
             self.agent = None
@@ -232,6 +264,19 @@ class ChatPanel(QWidget):
         self.history_layout.removeWidget(self._typing_indicator)
         self._typing_indicator.deleteLater()
         self._typing_indicator = None
+
+    def _show_voice_transcribing_indicator(self) -> None:
+        self._voice_transcribing_indicator = TypingIndicator(self.history_content, is_user=True)
+        self.history_layout.insertWidget(self.history_layout.count() - 1, self._voice_transcribing_indicator)
+        QTimer.singleShot(0, self._scroll_to_bottom)
+
+    def _hide_voice_transcribing_indicator(self) -> None:
+        if self._voice_transcribing_indicator is None:
+            return
+        self._voice_transcribing_indicator.stop()
+        self.history_layout.removeWidget(self._voice_transcribing_indicator)
+        self._voice_transcribing_indicator.deleteLater()
+        self._voice_transcribing_indicator = None
 
     def _on_show_reply(self, reply: str) -> None:
         if self.sender() is not self.agent:

@@ -212,6 +212,9 @@ RECIPE_POPUP_TITLE_MAX_LENGTH: int = 30
 # MIC BUTTON
 MIC_BUTTON_LISTENING_TEXT: str = "Mic: Listening"
 MIC_BUTTON_MUTED_TEXT: str = "Mic: Muted"
+MIC_BUTTON_LOADING_TEXT: str = "Speech model is loading"
+MIC_BUTTON_LISTENING_TEXT: str = "Mic: Listening"
+MIC_BUTTON_MUTED_TEXT: str = "Mic: Muted"
 
 # OBJECT NAMES
 OBJECT_NAME_CANVAS_PANEL: str = "canvasPanel"

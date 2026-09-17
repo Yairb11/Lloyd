@@ -45,6 +45,8 @@ class VoiceListener(QThread):
     stop_word_detected = pyqtSignal()
     speech_started = pyqtSignal()
     speech_ended = pyqtSignal()
+    transcribing_started = pyqtSignal()
+    transcribing_ended = pyqtSignal()
     error_occurred = pyqtSignal(str)
     partial_transcript = pyqtSignal(str)
     listener_ready = pyqtSignal()
@@ -281,8 +283,12 @@ class VoiceListener(QThread):
             return ""
 
         audio_np = np.frombuffer(bytes(audio_buffer), dtype=np.int16).astype(np.float32) / 32768.0
-        segments, _ = command_model.transcribe(audio_np, language=VOICE_WHISPER_LANGUAGE)
-        return " ".join(segment.text.strip() for segment in segments).strip()
+        self.transcribing_started.emit()
+        try:
+            segments, _ = command_model.transcribe(audio_np, language=VOICE_WHISPER_LANGUAGE)
+            return " ".join(segment.text.strip() for segment in segments).strip()
+        finally:
+            self.transcribing_ended.emit()
 
     def _ensure_stream_open(self) -> None:
         if self._stream is not None:

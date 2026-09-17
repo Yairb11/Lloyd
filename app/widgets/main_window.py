@@ -24,6 +24,7 @@ from app.config import (
     VIDEO_PREVIEW_DEFAULT_HEIGHT,
     VIDEO_PREVIEW_DEFAULT_WIDTH,
     VIDEO_PREVIEW_POSITION_OFFSET,
+    VOICE_MSG_NO_COMMAND_HEARD,
     WINDOW_MIN_HEIGHT,
     WINDOW_MIN_WIDTH,
     WINDOW_TITLE,
@@ -51,6 +52,7 @@ class MainWindow(QMainWindow):
         self._agent_busy: bool = False
         self._is_rendering: bool = False
         self._tts_speaking: bool = False
+        self._transcribing: bool = False
         self._voice_ready: bool = False
 
         central = QWidget(self)
@@ -65,6 +67,7 @@ class MainWindow(QMainWindow):
         self.chat_panel = ChatPanel(
             on_thinking_started=self._on_thinking_started, 
             on_thinking_ended=self._on_thinking_ended,
+            on_voice_transcription_ended=self._on_transcribing_ended,
             on_speaking_started=self._on_speaking_started,
             on_speaking_ended=self._on_speaking_ended,
             on_speaking_amplitude=self._on_speaking_amplitude,
@@ -86,10 +89,6 @@ class MainWindow(QMainWindow):
         self._setup_shortcuts()
         self._restore_settings()
         self._setup_voice_listener()
-
-        self.canvas_panel.mic_toggle_button.setChecked(True)
-        self.canvas_panel.mic_toggle_button.toggled.connect(self._on_mic_toggle)
-        self._on_mic_toggle(True)
 
         self.canvas_panel.mute_button.toggled.connect(self._on_mute_toggle)
 
@@ -157,23 +156,28 @@ class MainWindow(QMainWindow):
         self.voice_listener.error_occurred.connect(self._on_voice_error)
         self.voice_listener.speech_started.connect(self._on_speech_started)
         self.voice_listener.speech_ended.connect(self._on_speech_ended)
+        self.voice_listener.transcribing_started.connect(self._on_transcribing_started)
+        self.voice_listener.transcribing_ended.connect(self._on_transcribing_ended)
 
         self.canvas_panel.mic_toggle_button.setChecked(True)
         self.canvas_panel.mic_toggle_button.toggled.connect(self._on_mic_toggle)
-        self._on_mic_toggle(True)
+        self.voice_listener.pause()
 
         self._refresh_busy_visuals()
         self.voice_listener.start()
 
     def _on_listener_ready(self) -> None:
         self._voice_ready = True
+        button = self.canvas_panel.mic_toggle_button
+        button.setEnabled(True)
+        button.setText(MIC_BUTTON_MUTED_TEXT if button.isChecked() else MIC_BUTTON_LISTENING_TEXT)
         self._refresh_busy_visuals()
 
     def _on_wake_word_detected(self, text: str) -> None:
-        self.chat_panel.submit_message(text, via_voice=True)
+        self.chat_panel.finish_voice_transcription(text)
 
     def _on_stop_word_detected(self) -> None:
-        if not (self._agent_busy or self._tts_speaking):
+        if not (self._agent_busy or self._tts_speaking or self._transcribing):
             return
         self.chat_panel.interrupt()
 
@@ -181,14 +185,23 @@ class MainWindow(QMainWindow):
         self.canvas_panel.sphere.enter_listening()
 
     def _on_speech_ended(self):
-        self.canvas_panel.sphere.enter_idle()
+        self._refresh_busy_visuals()
+
+    def _on_transcribing_started(self) -> None:
+        self._transcribing = True
+        self._refresh_busy_visuals()
+        self.chat_panel.start_voice_transcription()
+
+    def _on_transcribing_ended(self) -> None:
+        self._transcribing = False
+        self._refresh_busy_visuals()
 
     def _refresh_busy_visuals(self) -> None:
         if not self._voice_ready:
             self.canvas_panel.sphere.enter_thinking()
             return
 
-        if self._agent_busy:
+        if self._agent_busy or self._transcribing:
             if self._is_rendering:
                 self.canvas_panel.sphere.enter_rendering()
             else:
@@ -198,7 +211,7 @@ class MainWindow(QMainWindow):
         else:
             self.canvas_panel.sphere.enter_idle()
 
-        if self._agent_busy or self._tts_speaking:
+        if self._agent_busy or self._tts_speaking or self._transcribing:
             self.voice_listener.suspend()
         else:
             self.voice_listener.unsuspend()
@@ -250,6 +263,8 @@ class MainWindow(QMainWindow):
 
     def _on_voice_error(self, message: str) -> None:
         print(f"{LOG_PREFIX_VOICE} {message}")
+        if message == VOICE_MSG_NO_COMMAND_HEARD:
+            self.chat_panel.finish_voice_transcription("")
 
     def _on_mute_toggle(self, checked: bool) -> None:
         self.chat_panel.set_speech_muted(checked)

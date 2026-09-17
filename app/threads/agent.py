@@ -177,9 +177,19 @@ class Agent(QThread):
             worker.request_stop()
 
     def shutdown(self) -> None:
+        self._interrupted.set()
         self.stop_active_worker()
+        proc = self._cli_process
+        if proc is not None and proc.poll() is None:
+            try:
+                proc.kill()
+            except OSError:
+                pass
         if self._scan_popup is not None:
             self._scan_popup.close()
+        for worker in self._child_workers:
+            worker.wait()
+        self.wait()
 
     def scan_image(self) -> None:
         done_event = threading.Event()
