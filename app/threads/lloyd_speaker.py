@@ -1,5 +1,6 @@
 import asyncio
 import io
+import itertools
 import edge_tts
 import numpy as np
 from PyQt6.QtCore import QThread, pyqtSignal
@@ -18,6 +19,7 @@ from app.config import (
 from app.helpers.audio_playback import AmplitudePlayer, decode_audio_to_pcm, silence_pcm
 from app.helpers.text import split_into_sentences
 from app.helpers import perf
+from app.helpers.qthread_support import track
 
 
 class LloydSpeaker(QThread):
@@ -27,6 +29,7 @@ class LloydSpeaker(QThread):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        track(self, "LloydSpeaker")
         self._text: str = ""
         self._player = AmplitudePlayer(
             block_frames=TTS_AUDIO_BLOCK_FRAMES,

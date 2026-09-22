@@ -1,3 +1,4 @@
+import itertools
 import json
 import os
 import shutil
@@ -10,6 +11,9 @@ from app.helpers.cocktail_animation_scene import CocktailAnimationScene
 from app.helpers.text import sanitize_cocktail_filename
 from app.threads.cancellable_worker import CancellableWorker
 from app.helpers import perf
+from app.helpers.qthread_support import track
+
+_render_sequence = itertools.count(1)
 
 class ManimRenderWorker(CancellableWorker):
     rendering_finished = pyqtSignal(str)
@@ -17,6 +21,7 @@ class ManimRenderWorker(CancellableWorker):
 
     def __init__(self, recipe_str: str, parent=None):
         super().__init__(parent)
+        track(self, f"ManimRenderWorker-{next(_render_sequence)}")
         self.recipe_str = recipe_str
         self._temp_media_dir: Path | None = None
 

@@ -18,12 +18,13 @@ from app.config import (
     OBJECT_NAME_CHAT_HISTORY,
     OBJECT_NAME_CHAT_PANEL,
     OBJECT_NAME_SEND_BUTTON,
+    SHUTDOWN_THREAD_TIMEOUT_MS,
 )
 from app.helpers.text import clean_text_for_speech
 from app.threads import Agent, LloydSpeaker
 from app.widgets.chat_bubble import ChatBubble
 from app.widgets.typing_indicator import TypingIndicator
-from app.helpers import perf
+from app.helpers import perf, qthread_support
 
 
 class ChatPanel(QWidget):
@@ -129,6 +130,7 @@ class ChatPanel(QWidget):
             perf.start("text")
 
         self._append_bubble(message, is_user=True)
+        qthread_support.retire(self.agent)
         self.agent = Agent(message, session_id=self._session_id)
         self.agent.error_occurred.connect(self._on_agent_error)
         self.agent.show_reply.connect(self._on_show_reply)
@@ -190,8 +192,8 @@ class ChatPanel(QWidget):
         if self.agent is not None:
             agent = self.agent
             self.agent = None
-            agent.finished.connect(agent.deleteLater)
             agent.interrupt()
+            qthread_support.retire(agent)
 
         self.lloyd_speaker.stop()
         self._hide_typing_indicator()
@@ -209,6 +211,7 @@ class ChatPanel(QWidget):
         if self.agent is not None:
             self.agent.shutdown()
             self.agent = None
+        qthread_support.stop_retired(SHUTDOWN_THREAD_TIMEOUT_MS)
         self.lloyd_speaker.stop()
 
     def _set_busy(self, busy: bool) -> None:

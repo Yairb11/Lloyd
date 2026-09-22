@@ -37,7 +37,7 @@ from app.widgets.chat_panel import ChatPanel
 from app.widgets.top_left_video_widget import TopLeftVideoWidget
 from app.widgets.top_right_recipes_widget import TopRightRecipyWidget
 from app.win_dark_mode import enable_dark_titlebar
-from app.helpers import perf
+from app.helpers import perf, qthread_support
 
 
 class MainWindow(QMainWindow):
@@ -291,6 +291,7 @@ class MainWindow(QMainWindow):
             self._dark_titlebar_applied = True
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        qthread_support.log_running("closeEvent")
         self.voice_listener.stop()
         self.chat_panel.shutdown()
         self.recipe_widget.shutdown()

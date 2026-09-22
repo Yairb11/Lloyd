@@ -1,10 +1,16 @@
+import itertools
+
 from app.config import LOG_PREFIX_ERROR, PHONE_SCAN_POLL_INTERVAL_S
 from app.helpers.phone_upload_handle import PhoneUploadServer
+from app.helpers.qthread_support import track
 from app.threads.cancellable_worker import CancellableWorker
+
+_phone_server_sequence = itertools.count(1)
 
 class PhoneServerWorker(CancellableWorker):
     def __init__(self, httpd: PhoneUploadServer, parent=None) -> None:
         super().__init__(parent)
+        track(self, f"PhoneServerWorker-{next(_phone_server_sequence)}")
         self.httpd = httpd
 
     def do_work(self) -> None:

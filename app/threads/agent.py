@@ -5,7 +5,9 @@ from pathlib import Path
 from datetime import datetime
 from PyQt6.QtCore import QThread, pyqtSignal
 from jsonschema import ValidationError, validate
+import itertools
 
+from app.helpers.qthread_support import track
 from app.agent import ask_bartender
 from app.agent.step_by_step_schema import STEP_BY_STEP_SCHEMA
 from app.config import (
@@ -29,6 +31,8 @@ from app.threads.cancellable_worker import CancellableWorker
 from app.threads.manim_render_worker import ManimRenderWorker
 from app.helpers import perf
 
+_agent_sequence = itertools.count(1)
+
 class Agent(QThread):
     thinking_started = pyqtSignal()
     thinking_ended = pyqtSignal()
@@ -44,6 +48,7 @@ class Agent(QThread):
 
     def __init__(self, message: str, session_id: str | None = None, parent=None) -> None:
         super().__init__(parent=parent)
+        track(self, f"Agent-{next(_agent_sequence)}")
         self.message = message
         self.session_id = session_id
         self._paused = threading.Event()
@@ -250,7 +255,7 @@ class Agent(QThread):
         self.show_reply.emit(output_messgae)
 
     def generate_and_show_from_string(self, recipe_json_string: str):
-        self.manim_worker = ManimRenderWorker(recipe_json_string, self)
+        self.manim_worker = ManimRenderWorker(recipe_json_string)
         self._spawn_child(self.manim_worker)
         self.manim_worker.rendering_finished.connect(self._on_render_success)
         self.manim_worker.rendering_failed.connect(self._on_render_failure)

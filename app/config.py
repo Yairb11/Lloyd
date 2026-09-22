@@ -232,60 +232,77 @@ LOG_PREFIX_AGENT: str = "[Lloyd agent]"
 LOG_PREFIX_ERROR: str = "[Lloyd Error]"
 
 # VOICE INPUT
-VOICE_WAKE_WORDS: tuple[str, ...] = (
-    "hey lloyd",
-    "hey floyd",
-    "hey loyd",
-    "hey boyd",
-    "hi lloyd",
-    "a lloyd",
-)
 VOICE_WAKE_KEYWORD: str = "lloyd"
+VOICE_WAKE_KEYWORD_VARIANTS: tuple[str, ...] = ("lloyd", "loyd", "floyd", "boyd")
+VOICE_WAKE_GREETINGS: tuple[str, ...] = ("hey", "hay", "hi", "ay")
+VOICE_WAKE_KEYWORD_MATCH_THRESHOLD: int = 88
+VOICE_WAKE_GREETING_MATCH_THRESHOLD: int = 80
+VOICE_WAKE_KEYWORD_MAX_WORDS: int = 2
+VOICE_WAKE_REFRACTORY_S: float = 1.5
+
+VOICE_STOP_PHRASE: str = "lloyd stop"
+VOICE_STOP_KEYWORD: str = "stop"
+VOICE_STOP_KEYWORD_MATCH_THRESHOLD: int = 88
+
+VOICE_WAKE_GRAMMAR_ENABLED: bool = False
+VOICE_WAKE_GRAMMAR_UNKNOWN_TOKEN: str = "[unk]"
+
+VOICE_VOSK_WAKE_MODEL_DIR: str = "models/vosk-model-small-en-us-0.15"
 VOICE_RECOGNITION_LANGUAGE: str = "en-US"
 VOICE_COMMAND_MODEL_WARMUP_SECONDS: float = 1.0
 
-VOICE_VOSK_WAKE_MODEL_DIR: str = "models/vosk-model-small-en-us-0.15"
-
-VOICE_WHISPER_MODEL_SIZE: str = "small"
+VOICE_WHISPER_MODEL_SIZE: str = "distil-small.en"
 VOICE_WHISPER_DEVICE: str = "cpu"
 VOICE_WHISPER_COMPUTE_TYPE: str = "int8"
 VOICE_WHISPER_DOWNLOAD_ROOT: str = "models/whisper"
 VOICE_WHISPER_LANGUAGE: str = "en"
-VOICE_WHISPER_CPU_THREADS: int = 4
+VOICE_WHISPER_CPU_THREADS: int = 8
+
+VOICE_WHISPER_BEAM_SIZE: int = 1
+VOICE_WHISPER_BEST_OF: int = 1
+VOICE_WHISPER_TEMPERATURE: float = 0.0
+VOICE_WHISPER_CONDITION_ON_PREVIOUS_TEXT: bool = False
+VOICE_WHISPER_WITHOUT_TIMESTAMPS: bool = True
+VOICE_WHISPER_VAD_FILTER: bool = True
 
 VOICE_SAMPLE_RATE_HZ: int = 16000
 VOICE_AUDIO_DTYPE: str = "int16"
 VOICE_BLOCK_SIZE_FRAMES: int = 2048
 
-VOICE_WAKE_PHRASE_MATCH_THRESHOLD: int = 85
-VOICE_WAKE_KEYWORD_MATCH_THRESHOLD: int = 80
-VOICE_WAKE_KEYWORD_MAX_WORDS: int = 2
-VOICE_STOP_PHRASE: str = "lloyd stop"
-VOICE_STOP_PHRASE_MATCH_THRESHOLD: int = 85
-VOICE_STOP_KEYWORD_MAX_WORDS: int = 2
-
-VOICE_COMMAND_START_TIMEOUT_S: float = 5.0
-VOICE_COMMAND_SILENCE_TIMEOUT_S: float = 1.2
-VOICE_COMMAND_MAX_DURATION_S: float = 12.0
-VOICE_SILENCE_RMS_THRESHOLD: float = 300.0
-
-VOICE_PAUSED_POLL_INTERVAL_MS: int = 250
-VOICE_QUEUE_POLL_TIMEOUT_S: float = 0.2
-
 VOICE_AUDIO_QUEUE_MAX_S: float = 1.0
 VOICE_PREROLL_S: float = 1.5
 VOICE_PREROLL_SPEECH_PROBE_S: float = 0.25
+VOICE_PAUSED_POLL_INTERVAL_MS: int = 250
+VOICE_QUEUE_POLL_TIMEOUT_S: float = 0.2
 
-VOICE_WAKE_GRAMMAR_ENABLED: bool = True
-VOICE_WAKE_GRAMMAR_UNKNOWN_TOKEN: str = "[unk]"
-VOICE_MSG_WAKE_GRAMMAR_UNSUPPORTED: str = (
-    "Wake grammar rejected by the Vosk model; falling back to open recognition."
-)
+VOICE_COMMAND_START_TIMEOUT_S: float = 5.0
+VOICE_COMMAND_SILENCE_TIMEOUT_S: float = 0.4
+VOICE_COMMAND_SILENCE_TIMEOUT_FALLBACK_S: float = 1.2
+VOICE_COMMAND_MAX_DURATION_S: float = 12.0
+VOICE_SILENCE_RMS_THRESHOLD: float = 300.0
+
+VOICE_VAD_ENABLED: bool = True
+VOICE_VAD_FRAME_SAMPLES: int = 512
+VOICE_VAD_CONTEXT_SAMPLES: int = 64
+VOICE_VAD_STATE_SIZE: int = 128
+VOICE_VAD_SPEECH_THRESHOLD: float = 0.5
+VOICE_VAD_SILENCE_THRESHOLD: float = 0.35
+
+VOICE_STREAM_TRANSCRIPT_ENABLED: bool = True
+
+VOICE_LOG_WAKE_MATCH: str = "Wake matched:"
+VOICE_LOG_TRANSCRIPT_COMPARISON: str = "Transcript comparison:"
 
 VOICE_MSG_NO_COMMAND_HEARD: str = "Didn't catch that — try again?"
 VOICE_MSG_MODEL_MISSING: str = (
     "Voice input is unavailable: a Vosk model was not found. Download it "
     "and place it in the configured model directory."
+)
+VOICE_MSG_WAKE_GRAMMAR_UNSUPPORTED: str = (
+    "Wake grammar rejected by the Vosk model; falling back to open recognition."
+)
+VOICE_MSG_VAD_UNAVAILABLE: str = (
+    "Silero VAD unavailable; endpointing falls back to the RMS gate."
 )
 
 # SPEECH TEXT CLEANING
@@ -655,3 +672,11 @@ PERF_LOG_DIR: str = "runtime/perf"
 PERF_LOG_FILENAME_FORMAT: str = "%Y%m%d.jsonl"
 PERF_LOG_PREFIX: str = "[perf]"
 PERF_STAGE_COLUMN_WIDTH: int = 28
+
+
+
+
+# THREAD DIAGNOSTICS
+QTHREAD_DIAGNOSTICS_ENABLED: bool = True
+QTHREAD_LOG_PREFIX: str = "[Lloyd thread]"
+SHUTDOWN_THREAD_TIMEOUT_MS: int = 3000

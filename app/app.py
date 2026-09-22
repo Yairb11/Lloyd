@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import QApplication
 from app.config import APP_NAME, LOG_PREFIX_ERROR, MCP_WATCHDOG_POLL_INTERVAL_S, ORG_NAME
 from app.setup import is_mcp_server_alive, shutdown_mcp_server
 from app.widgets import MainWindow
+from app.helpers import qthread_support
 
 _window: MainWindow | None = None
 _mcp_watchdog: QTimer | None = None
@@ -57,6 +58,7 @@ def _on_mcp_watchdog_tick() -> None:
 
 def run() -> None:
     global _window, _mcp_watchdog
+    qthread_support.install_diagnostics()
     sys.excepthook = _crash_excepthook
 
     app = QApplication(sys.argv)

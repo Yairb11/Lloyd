@@ -1,6 +1,5 @@
 import collections
 import json
-import math
 import os
 import queue
 import threading
@@ -18,69 +17,97 @@ from app.config import (
     VOICE_BLOCK_SIZE_FRAMES,
     VOICE_COMMAND_MAX_DURATION_S,
     VOICE_COMMAND_MODEL_WARMUP_SECONDS,
-    VOICE_COMMAND_SILENCE_TIMEOUT_S,
     VOICE_COMMAND_START_TIMEOUT_S,
+    VOICE_LOG_TRANSCRIPT_COMPARISON,
+    VOICE_LOG_WAKE_MATCH,
     VOICE_MSG_MODEL_MISSING,
     VOICE_MSG_NO_COMMAND_HEARD,
+    VOICE_MSG_VAD_UNAVAILABLE,
     VOICE_MSG_WAKE_GRAMMAR_UNSUPPORTED,
     VOICE_PAUSED_POLL_INTERVAL_MS,
     VOICE_PREROLL_S,
-    VOICE_PREROLL_SPEECH_PROBE_S,
     VOICE_QUEUE_POLL_TIMEOUT_S,
     VOICE_SAMPLE_RATE_HZ,
-    VOICE_SILENCE_RMS_THRESHOLD,
+    VOICE_STOP_KEYWORD,
+    VOICE_STOP_KEYWORD_MATCH_THRESHOLD,
     VOICE_STOP_PHRASE,
-    VOICE_STOP_PHRASE_MATCH_THRESHOLD,
+    VOICE_STREAM_TRANSCRIPT_ENABLED,
+    VOICE_VAD_ENABLED,
     VOICE_VOSK_WAKE_MODEL_DIR,
     VOICE_WAKE_GRAMMAR_ENABLED,
     VOICE_WAKE_GRAMMAR_UNKNOWN_TOKEN,
+    VOICE_WAKE_GREETING_MATCH_THRESHOLD,
+    VOICE_WAKE_GREETINGS,
     VOICE_WAKE_KEYWORD,
     VOICE_WAKE_KEYWORD_MATCH_THRESHOLD,
     VOICE_WAKE_KEYWORD_MAX_WORDS,
-    VOICE_WAKE_PHRASE_MATCH_THRESHOLD,
-    VOICE_WAKE_WORDS,
+    VOICE_WAKE_KEYWORD_VARIANTS,
+    VOICE_WAKE_REFRACTORY_S,
+    VOICE_WHISPER_BEAM_SIZE,
+    VOICE_WHISPER_BEST_OF,
     VOICE_WHISPER_COMPUTE_TYPE,
+    VOICE_WHISPER_CONDITION_ON_PREVIOUS_TEXT,
     VOICE_WHISPER_CPU_THREADS,
     VOICE_WHISPER_DEVICE,
     VOICE_WHISPER_DOWNLOAD_ROOT,
     VOICE_WHISPER_LANGUAGE,
     VOICE_WHISPER_MODEL_SIZE,
+    VOICE_WHISPER_TEMPERATURE,
+    VOICE_WHISPER_VAD_FILTER,
+    VOICE_WHISPER_WITHOUT_TIMESTAMPS,
 )
 from app.helpers import perf
-
-_BYTES_PER_SAMPLE: int = np.dtype(VOICE_AUDIO_DTYPE).itemsize
-_CHUNK_DURATION_S: float = VOICE_BLOCK_SIZE_FRAMES / VOICE_SAMPLE_RATE_HZ
-
-
-def _chunks_for(seconds: float) -> int:
-    return max(1, math.ceil(seconds / _CHUNK_DURATION_S))
+from app.helpers.qthread_support import track
+from app.helpers.audio_capture import (
+    chunks_for,
+    create_speech_detector,
+    load_silero_session,
+    to_float32,
+)
 
 
 def _build_wake_grammar() -> str:
-    phrases = {phrase.strip().lower() for phrase in VOICE_WAKE_WORDS}
-    phrases.add(VOICE_WAKE_KEYWORD)
-    phrases.add(VOICE_STOP_PHRASE)
+    phrases = {VOICE_WAKE_KEYWORD, VOICE_STOP_PHRASE}
+    for variant in VOICE_WAKE_KEYWORD_VARIANTS:
+        phrases.add(variant)
+        for greeting in VOICE_WAKE_GREETINGS:
+            phrases.add(f"{greeting} {variant}")
     return json.dumps(sorted(phrases) + [VOICE_WAKE_GRAMMAR_UNKNOWN_TOKEN])
 
 
-def _is_speech(audio: bytes) -> bool:
-    samples = np.frombuffer(audio, dtype=VOICE_AUDIO_DTYPE)
-    if samples.size == 0:
-        return False
-    rms = float(np.sqrt(np.mean(np.square(samples.astype(np.float64)))))
-    return rms >= VOICE_SILENCE_RMS_THRESHOLD
+def _best_score(word: str, candidates: tuple[str, ...]) -> int:
+    return max(fuzz.ratio(candidate, word) for candidate in candidates)
 
 
-def _ends_in_speech(audio: bytes) -> bool:
-    return bool(audio) and _is_speech(audio[-_PREROLL_PROBE_BYTES:])
+def _is_keyword(word: str) -> bool:
+    return _best_score(word, VOICE_WAKE_KEYWORD_VARIANTS) >= VOICE_WAKE_KEYWORD_MATCH_THRESHOLD
+
+
+def _is_greeting(word: str) -> bool:
+    return _best_score(word, VOICE_WAKE_GREETINGS) >= VOICE_WAKE_GREETING_MATCH_THRESHOLD
+
+
+def _is_stop_keyword(word: str) -> bool:
+    return fuzz.ratio(VOICE_STOP_KEYWORD, word) >= VOICE_STOP_KEYWORD_MATCH_THRESHOLD
+
+
+def _decode_command(model: WhisperModel, audio: np.ndarray, vad_filter: bool) -> str:
+    segments, _ = model.transcribe(
+        audio,
+        language=VOICE_WHISPER_LANGUAGE,
+        beam_size=VOICE_WHISPER_BEAM_SIZE,
+        best_of=VOICE_WHISPER_BEST_OF,
+        temperature=VOICE_WHISPER_TEMPERATURE,
+        condition_on_previous_text=VOICE_WHISPER_CONDITION_ON_PREVIOUS_TEXT,
+        without_timestamps=VOICE_WHISPER_WITHOUT_TIMESTAMPS,
+        vad_filter=vad_filter,
+    )
+    return " ".join(segment.text.strip() for segment in segments).strip()
 
 
 _WAKE_GRAMMAR: str = _build_wake_grammar()
-_AUDIO_QUEUE_MAX_CHUNKS: int = _chunks_for(VOICE_AUDIO_QUEUE_MAX_S)
-_PREROLL_MAX_CHUNKS: int = _chunks_for(VOICE_PREROLL_S)
-_PREROLL_PROBE_BYTES: int = (
-    _chunks_for(VOICE_PREROLL_SPEECH_PROBE_S) * VOICE_BLOCK_SIZE_FRAMES * _BYTES_PER_SAMPLE
-)
+_AUDIO_QUEUE_MAX_CHUNKS: int = chunks_for(VOICE_AUDIO_QUEUE_MAX_S)
+_PREROLL_MAX_CHUNKS: int = chunks_for(VOICE_PREROLL_S)
 
 
 class VoiceListener(QThread):
@@ -97,6 +124,7 @@ class VoiceListener(QThread):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        track(self, "VoiceListener")
         self._paused = threading.Event()
         self._suspended = threading.Event()
 
@@ -105,6 +133,9 @@ class VoiceListener(QThread):
         self._stream: sd.RawInputStream | None = None
 
         self._grammar_supported: bool = VOICE_WAKE_GRAMMAR_ENABLED
+        self._wake_model: vosk.Model | None = None
+        self._vad_session: object | None = None
+        self._last_wake_at: float = 0.0
         self._command_model_thread: threading.Thread | None = None
         self._command_model_result: dict[str, object] = {}
 
@@ -127,15 +158,16 @@ class VoiceListener(QThread):
         self._start_command_model_loader()
 
         try:
-            wake_model = vosk.Model(VOICE_VOSK_WAKE_MODEL_DIR)
+            self._wake_model = vosk.Model(VOICE_VOSK_WAKE_MODEL_DIR)
         except Exception as exc:
             self.error_occurred.emit(f"{VOICE_MSG_MODEL_MISSING} ({exc})")
             return
 
+        self._vad_session = self._load_vad_session()
         self.listener_ready.emit()
 
         try:
-            self._run_loop(wake_model)
+            self._run_loop()
         finally:
             self._close_stream()
 
@@ -145,6 +177,15 @@ class VoiceListener(QThread):
             self.error_occurred.emit(f"Using input device: {device_info.get('name')!r}")
         except Exception as exc:
             self.error_occurred.emit(f"Could not query input device: {exc}")
+
+    def _load_vad_session(self) -> object | None:
+        if not VOICE_VAD_ENABLED:
+            return None
+        try:
+            return load_silero_session()
+        except Exception as exc:
+            self.error_occurred.emit(f"{VOICE_MSG_VAD_UNAVAILABLE} ({exc})")
+            return None
 
     def _start_command_model_loader(self) -> None:
         def load_and_warm() -> None:
@@ -160,8 +201,7 @@ class VoiceListener(QThread):
                     int(VOICE_SAMPLE_RATE_HZ * VOICE_COMMAND_MODEL_WARMUP_SECONDS),
                     dtype=np.float32,
                 )
-                segments, _ = model.transcribe(silence, language=VOICE_WHISPER_LANGUAGE)
-                list(segments)
+                _decode_command(model, silence, False)
                 self._command_model_result["model"] = model
             except Exception as exc:
                 self._command_model_result["error"] = exc
@@ -178,8 +218,8 @@ class VoiceListener(QThread):
             perf.mark("stt.model_wait")
         return self._command_model_result.get("model")
 
-    def _run_loop(self, wake_model: vosk.Model) -> None:
-        wake_rec = self._new_wake_recognizer(wake_model)
+    def _run_loop(self) -> None:
+        wake_rec = self._new_wake_recognizer()
 
         while not self.isInterruptionRequested():
             if self._paused.is_set():
@@ -209,7 +249,7 @@ class VoiceListener(QThread):
             if self._suspended.is_set():
                 if self._matches_stop_word(text):
                     self.stop_word_detected.emit()
-                    wake_rec = self._new_wake_recognizer(wake_model)
+                    wake_rec = self._new_wake_recognizer()
                 continue
 
             if text.strip():
@@ -217,6 +257,12 @@ class VoiceListener(QThread):
 
             if not self._matches_wake_word(text):
                 continue
+
+            if time.monotonic() - self._last_wake_at < VOICE_WAKE_REFRACTORY_S:
+                continue
+
+            self._last_wake_at = time.monotonic()
+            self.error_occurred.emit(f"{VOICE_LOG_WAKE_MATCH} {text!r}")
 
             perf.start("wake")
             self.wake_detected.emit()
@@ -235,56 +281,53 @@ class VoiceListener(QThread):
             else:
                 self.error_occurred.emit(VOICE_MSG_NO_COMMAND_HEARD)
 
-            wake_rec = self._new_wake_recognizer(wake_model)
+            wake_rec = self._new_wake_recognizer()
+            self._last_wake_at = time.monotonic()
 
-    def _new_wake_recognizer(self, wake_model: vosk.Model) -> vosk.KaldiRecognizer:
+    def _new_wake_recognizer(self) -> vosk.KaldiRecognizer:
         if self._grammar_supported:
             try:
-                rec = vosk.KaldiRecognizer(wake_model, VOICE_SAMPLE_RATE_HZ, _WAKE_GRAMMAR)
+                rec = vosk.KaldiRecognizer(self._wake_model, VOICE_SAMPLE_RATE_HZ, _WAKE_GRAMMAR)
                 rec.SetWords(False)
                 return rec
             except Exception as exc:
                 self._grammar_supported = False
                 self.error_occurred.emit(f"{VOICE_MSG_WAKE_GRAMMAR_UNSUPPORTED} ({exc})")
 
-        rec = vosk.KaldiRecognizer(wake_model, VOICE_SAMPLE_RATE_HZ)
+        rec = vosk.KaldiRecognizer(self._wake_model, VOICE_SAMPLE_RATE_HZ)
         rec.SetWords(False)
         return rec
 
     def _matches_wake_word(self, text: str) -> bool:
-        normalized = text.strip().lower()
-        if not normalized:
+        words = text.strip().lower().split()
+        if not words:
             return False
 
-        words = normalized.split()
+        if not _is_keyword(words[-1]):
+            return False
 
-        for phrase in VOICE_WAKE_WORDS:
-            if len(words) < len(phrase.split()):
-                continue
-            if fuzz.partial_ratio(phrase, normalized) >= VOICE_WAKE_PHRASE_MATCH_THRESHOLD:
-                return True
+        if len(words) >= 2 and _is_greeting(words[-2]):
+            return True
 
-        if 0 < len(words) <= VOICE_WAKE_KEYWORD_MAX_WORDS:
-            for word in words:
-                if fuzz.ratio(VOICE_WAKE_KEYWORD, word) >= VOICE_WAKE_KEYWORD_MATCH_THRESHOLD:
-                    return True
-
-        return False
+        return len(words) <= VOICE_WAKE_KEYWORD_MAX_WORDS
 
     def _matches_stop_word(self, text: str) -> bool:
-        normalized = text.strip().lower()
-        if not normalized:
+        words = text.strip().lower().split()
+        if len(words) < 2:
             return False
 
-        if len(normalized.split()) < len(VOICE_STOP_PHRASE.split()):
-            return False
-
-        return fuzz.partial_ratio(VOICE_STOP_PHRASE, normalized) >= VOICE_STOP_PHRASE_MATCH_THRESHOLD
+        return _is_keyword(words[-2]) and _is_stop_keyword(words[-1])
 
     def _capture_command(self) -> str:
         preroll = self._take_preroll()
         audio_buffer = bytearray(preroll)
-        started_talking = _ends_in_speech(preroll)
+
+        detector = create_speech_detector(self._vad_session)
+        stream_rec = self._new_stream_recognizer()
+        if stream_rec is not None and preroll:
+            stream_rec.AcceptWaveform(preroll)
+
+        started_talking = detector.prime(preroll)
 
         start_time = time.monotonic()
         silence_started_at: float | None = None
@@ -305,14 +348,16 @@ class VoiceListener(QThread):
                 continue
 
             audio_buffer.extend(chunk)
+            if stream_rec is not None:
+                stream_rec.AcceptWaveform(chunk)
 
-            if _is_speech(chunk):
+            if detector.is_speaking(chunk):
                 started_talking = True
                 silence_started_at = None
             elif started_talking:
                 if silence_started_at is None:
                     silence_started_at = time.monotonic()
-                elif time.monotonic() - silence_started_at >= VOICE_COMMAND_SILENCE_TIMEOUT_S:
+                elif time.monotonic() - silence_started_at >= detector.silence_timeout_s:
                     break
 
         if not audio_buffer:
@@ -320,22 +365,56 @@ class VoiceListener(QThread):
 
         perf.mark("stt.capture_end")
 
+        fast_text = self._stream_transcript(stream_rec)
+        if fast_text:
+            perf.mark("stt.vosk_instant")
+
         command_model = self._await_command_model()
         if command_model is None:
             self.error_occurred.emit(
                 f"{VOICE_MSG_MODEL_MISSING} ({self._command_model_result.get('error')})"
             )
-            return ""
+            return fast_text
 
-        audio_np = np.frombuffer(bytes(audio_buffer), dtype=np.int16).astype(np.float32) / 32768.0
         self.transcribing_started.emit()
         try:
-            segments, _ = command_model.transcribe(audio_np, language=VOICE_WHISPER_LANGUAGE)
-            text = " ".join(segment.text.strip() for segment in segments).strip()
+            refined = _decode_command(
+                command_model, to_float32(bytes(audio_buffer)), VOICE_WHISPER_VAD_FILTER
+            )
             perf.mark("stt.decoded")
-            return text
+            self._log_transcript_comparison(fast_text, refined)
+            return refined or fast_text
         finally:
             self.transcribing_ended.emit()
+
+    def _new_stream_recognizer(self) -> vosk.KaldiRecognizer | None:
+        if not VOICE_STREAM_TRANSCRIPT_ENABLED or self._wake_model is None:
+            return None
+        try:
+            rec = vosk.KaldiRecognizer(self._wake_model, VOICE_SAMPLE_RATE_HZ)
+            rec.SetWords(False)
+            return rec
+        except Exception as exc:
+            self.error_occurred.emit(f"Streaming recognizer unavailable: {exc}")
+            return None
+
+    def _stream_transcript(self, stream_rec: vosk.KaldiRecognizer | None) -> str:
+        if stream_rec is None:
+            return ""
+        try:
+            return json.loads(stream_rec.FinalResult()).get("text", "").strip()
+        except Exception as exc:
+            self.error_occurred.emit(f"Streaming recognizer error: {exc}")
+            return ""
+
+    def _log_transcript_comparison(self, fast_text: str, refined: str) -> None:
+        if not VOICE_STREAM_TRANSCRIPT_ENABLED:
+            return
+        agreement = fuzz.ratio(fast_text.lower(), refined.lower())
+        self.error_occurred.emit(
+            f"{VOICE_LOG_TRANSCRIPT_COMPARISON} vosk={fast_text!r} "
+            f"whisper={refined!r} agreement={agreement}"
+        )
 
     def _take_preroll(self) -> bytes:
         chunks = list(self._preroll)
