@@ -1,5 +1,6 @@
 import numpy as np
 from manim import (
+    AnimationGroup,
     BLUE_A,
     BOLD,
     Create,
@@ -15,6 +16,7 @@ from manim import (
     ReplacementTransform,
     RIGHT,
     Scene,
+    Succession,
     Text,
     UL,
     UP,
@@ -53,6 +55,7 @@ from app.config import (
     ANIM_ICE_CUBE_FADE_RUN_TIME,
     ANIM_ICE_CUBE_FADE_SHIFT,
     ANIM_ICE_CUBE_HEIGHT_DELTA,
+    ANIM_ICE_CUBE_LAG_RATIO,
     ANIM_ICE_CUBE_X_SPACING,
     ANIM_ICE_CUBE_Y_OFFSET,
     ANIM_ICE_LARGE_FADE_RUN_TIME,
@@ -361,8 +364,14 @@ class CocktailAnimationScene(Scene):
         frost = ctx.container.outline.copy().set_color(BLUE_A).set_stroke(
             width=ANIM_CHILL_FROST_STROKE_WIDTH, opacity=ANIM_CHILL_FROST_STROKE_OPACITY
         )
-        self.play(FadeIn(frost), run_time=ANIM_CHILL_FADE_IN_RUN_TIME)
-        self.play(frost.animate.set_opacity(ANIM_CHILL_FADE_TARGET_OPACITY), run_time=ANIM_CHILL_FADE_OUT_RUN_TIME)
+        self.play(
+            Succession(
+                FadeIn(frost, run_time=ANIM_CHILL_FADE_IN_RUN_TIME),
+                frost.animate(run_time=ANIM_CHILL_FADE_OUT_RUN_TIME).set_opacity(
+                    ANIM_CHILL_FADE_TARGET_OPACITY
+                ),
+            )
+        )
         self.remove(frost)
         if not self._recipe.build_in_glass and PREP_VESSEL in self._vessels:
             self._ensure_vessel_visible(self._vessels[PREP_VESSEL])
@@ -389,14 +398,22 @@ class CocktailAnimationScene(Scene):
         is_prep_vessel = "shaker" in ctx.container.c_type or "mixing" in ctx.container.c_type
         num_cubes = ANIM_ICE_CUBE_COUNT_PREP if is_prep_vessel else ANIM_ICE_CUBE_COUNT_SERVING
 
+        fades = []
         for i in range(num_cubes):
             ice = create_ice_cube()
             offset_x = (i - (num_cubes - 1) / 2) * ANIM_ICE_CUBE_X_SPACING
             y_pos = ctx.bot_y + state.solid_h + ANIM_ICE_CUBE_Y_OFFSET
             ice.move_to(np.array([ctx.cx + offset_x, y_pos, 0]))
             ice.set_z_index(ANIM_SOLIDS_Z_INDEX)
-            self.play(FadeIn(ice, shift=DOWN * ANIM_ICE_CUBE_FADE_SHIFT), run_time=ANIM_ICE_CUBE_FADE_RUN_TIME)
+            fades.append(FadeIn(ice, shift=DOWN * ANIM_ICE_CUBE_FADE_SHIFT))
             state.solids.add(ice)
+
+        if fades:
+            self.play(
+                AnimationGroup(*fades, lag_ratio=ANIM_ICE_CUBE_LAG_RATIO),
+                run_time=ANIM_ICE_CUBE_FADE_RUN_TIME * num_cubes * ANIM_ICE_CUBE_LAG_RATIO
+                + ANIM_ICE_CUBE_FADE_RUN_TIME,
+            )
         state.solid_h += ANIM_ICE_CUBE_HEIGHT_DELTA
 
     def _measure(self, ctx):
@@ -448,11 +465,16 @@ class CocktailAnimationScene(Scene):
         state.liquid_h += thickness
         state.liquid_colors.append(color)
 
-        self.play(Create(stream), run_time=ANIM_MEASURE_STREAM_CREATE_RUN_TIME)
         self.play(
-            FadeIn(layer, shift=UP * ANIM_MEASURE_LAYER_FADE_SHIFT), run_time=ANIM_MEASURE_LAYER_FADE_RUN_TIME
+            Succession(
+                Create(stream, run_time=ANIM_MEASURE_STREAM_CREATE_RUN_TIME),
+                AnimationGroup(
+                    FadeIn(layer, shift=UP * ANIM_MEASURE_LAYER_FADE_SHIFT),
+                    FadeOut(stream),
+                    run_time=ANIM_MEASURE_LAYER_FADE_RUN_TIME,
+                ),
+            )
         )
-        self.play(FadeOut(stream), run_time=ANIM_MEASURE_STREAM_FADE_RUN_TIME)
         state.layers.add(layer)
 
     def _drop_solid(self, ctx, item_key, color):
@@ -471,15 +493,28 @@ class CocktailAnimationScene(Scene):
         merged = ctx.container.get_layer_polygon(0, total_h, color=blended_hex)
 
         self.play(
-            Wiggle(
-                state.get_content_group(),
-                scale_value=ANIM_SHAKE_WIGGLE_SCALE,
-                rotation_angle=ANIM_SHAKE_WIGGLE_ROTATION,
-                n_wiggles=ANIM_SHAKE_WIGGLE_COUNT,
-                run_time=ANIM_SHAKE_WIGGLE_RUN_TIME,
+            Succession(
+                Wiggle(
+                    state.get_content_group(),
+                    scale_value=ANIM_SHAKE_WIGGLE_SCALE,
+                    rotation_angle=ANIM_SHAKE_WIGGLE_ROTATION,
+                    n_wiggles=ANIM_SHAKE_WIGGLE_COUNT,
+                    run_time=ANIM_SHAKE_WIGGLE_RUN_TIME,
+                ),
+                AnimationGroup(
+                    FadeOut(state.layers),
+                    FadeOut(state.solids),
+                    FadeIn(merged),
+                    run_time=ANIM_SHAKE_MERGE_RUN_TIME,
+                ),
             )
         )
-        self._merge_layers(state, merged, total_h, blended_hex, ANIM_SHAKE_MERGE_RUN_TIME, absorb_solids=True)
+
+        state.layers = VGroup(merged)
+        state.liquid_h = total_h
+        state.liquid_colors = [blended_hex]
+        state.solids = VGroup()
+        state.solid_h = 0.0
 
     def _muddle(self, ctx):
         state, container = ctx.state, ctx.container
@@ -487,17 +522,28 @@ class CocktailAnimationScene(Scene):
 
         muddler = create_muddler(container.h)
         muddler.move_to(np.array([ctx.cx, ctx.bot_y + ANIM_MUDDLER_BOTTOM_OFFSET + muddler.height / 2, 0]))
-        self.play(
-            FadeIn(muddler, shift=DOWN * ANIM_MUDDLER_FADE_IN_SHIFT), run_time=ANIM_MUDDLER_FADE_IN_RUN_TIME
-        )
 
-        for lift, twist in ANIM_MUDDLER_STROKES:
-            self.play(
-                muddler.animate.shift(UP * lift).rotate(twist, about_point=muddler.get_bottom()),
-                run_time=ANIM_MUDDLER_STROKE_RUN_TIME,
-            )
+        strokes = [
+            muddler.animate(run_time=ANIM_MUDDLER_STROKE_RUN_TIME)
+            .shift(UP * lift)
+            .rotate(twist, about_point=muddler.get_bottom())
+            for lift, twist in ANIM_MUDDLER_STROKES
+        ]
+
         self.play(
-            FadeOut(muddler, shift=UP * ANIM_MUDDLER_FADE_OUT_SHIFT), run_time=ANIM_MUDDLER_FADE_OUT_RUN_TIME
+            Succession(
+                FadeIn(
+                    muddler,
+                    shift=DOWN * ANIM_MUDDLER_FADE_IN_SHIFT,
+                    run_time=ANIM_MUDDLER_FADE_IN_RUN_TIME,
+                ),
+                *strokes,
+                FadeOut(
+                    muddler,
+                    shift=UP * ANIM_MUDDLER_FADE_OUT_SHIFT,
+                    run_time=ANIM_MUDDLER_FADE_OUT_RUN_TIME,
+                ),
+            )
         )
 
         total_h = max(state.liquid_h, ANIM_MUDDLE_MIN_HEIGHT)
@@ -520,16 +566,32 @@ class CocktailAnimationScene(Scene):
         )
 
         spoon.move_to(np.array([cx + rx, cy_orbit, 0]))
-        self.play(FadeIn(spoon, shift=DOWN * ANIM_SPOON_FADE_IN_SHIFT), run_time=ANIM_SPOON_FADE_IN_RUN_TIME)
 
         orbit_animations = [MoveAlongPath(spoon, orbit)]
         if len(state.solids) > 0:
             orbit_animations.append(
                 state.solids.animate.rotate(ANIM_STIR_SOLIDS_ROTATE, about_point=container.get_center())
             )
-        self.play(*orbit_animations, run_time=ANIM_STIR_ORBIT_RUN_TIME, rate_func=linear)
 
-        self.play(FadeOut(spoon, shift=UP * ANIM_SPOON_FADE_OUT_SHIFT), run_time=ANIM_SPOON_FADE_OUT_RUN_TIME)
+        self.play(
+            Succession(
+                FadeIn(
+                    spoon,
+                    shift=DOWN * ANIM_SPOON_FADE_IN_SHIFT,
+                    run_time=ANIM_SPOON_FADE_IN_RUN_TIME,
+                ),
+                AnimationGroup(
+                    *orbit_animations,
+                    run_time=ANIM_STIR_ORBIT_RUN_TIME,
+                    rate_func=linear,
+                ),
+                FadeOut(
+                    spoon,
+                    shift=UP * ANIM_SPOON_FADE_OUT_SHIFT,
+                    run_time=ANIM_SPOON_FADE_OUT_RUN_TIME,
+                ),
+            )
+        )
 
         total_h = state.liquid_h
         merged = container.get_layer_polygon(0, total_h, color=blended_hex)
@@ -568,9 +630,13 @@ class CocktailAnimationScene(Scene):
             foam_layer = _create_foam_layer(dest)
             incoming.append(FadeIn(foam_layer, shift=DOWN * ANIM_STRAIN_FOAM_FADE_SHIFT))
 
-        self.play(Create(pour_curve), run_time=ANIM_STRAIN_POUR_CREATE_RUN_TIME)
-        self.play(*(fading_out + incoming), run_time=ANIM_STRAIN_TRANSFER_RUN_TIME)
-        self.play(FadeOut(pour_curve), run_time=ANIM_STRAIN_POUR_FADE_RUN_TIME)
+        self.play(
+            Succession(
+                Create(pour_curve, run_time=ANIM_STRAIN_POUR_CREATE_RUN_TIME),
+                AnimationGroup(*(fading_out + incoming), run_time=ANIM_STRAIN_TRANSFER_RUN_TIME),
+                FadeOut(pour_curve, run_time=ANIM_STRAIN_POUR_FADE_RUN_TIME),
+            )
+        )
 
         self._clear_vessel_contents(source)
 

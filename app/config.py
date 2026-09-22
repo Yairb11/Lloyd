@@ -176,21 +176,44 @@ SPHERE_SPEAKING_IDLE_BREATH_AMPLITUDE: float = 4.0
 SPHERE_SPEAKING_SMOOTHING_RISE: float = 0.45
 SPHERE_SPEAKING_SMOOTHING_FALL: float = 0.20
 
+# FLOATING PANEL
+PANEL_BORDER_WIDTH: int = 2
+PANEL_BORDER_RADIUS: int = 8
+PANEL_BORDER_MARGIN: int = 8
+PANEL_BODY_MARGIN: int = 6
+PANEL_HEADER_HEIGHT: int = 22
+PANEL_HEADER_SPACING: int = 4
+PANEL_CLOSE_BUTTON_SIZE: int = 16
+PANEL_CLOSE_BUTTON_RADIUS: int = 8
+PANEL_CLOSE_GLYPH: str = "✕"
+PANEL_TITLE_MAX_LENGTH: int = 30
+PANEL_ACTION_BUTTON_HEIGHT: int = 16
+PANEL_ACTION_BUTTON_RADIUS: int = 4
+PANEL_ACTION_BUTTON_PADDING_H: int = 8
+
+COLOR_PANEL_ACTION_BG: str = "#2b2b2e"
+COLOR_PANEL_ACTION_HOVER_BG: str = "#3b3b40"
+COLOR_PANEL_ACTION_TEXT: str = "#f3f3f3"
+COLOR_PANEL_ACTION_DISABLED_TEXT: str = "#6e6e74"
+
 # VIDEO PREVIEW
-VIDEO_BORDER_MARGIN: int = 8
 VIDEO_MIN_WIDTH: int = 260
 VIDEO_MIN_HEIGHT: int = 160
 VIDEO_DEFAULT_WIDTH: int = 380
 VIDEO_DEFAULT_HEIGHT: int = 240
-VIDEO_HEADER_HEIGHT: int = 22
-VIDEO_CLOSE_BUTTON_SIZE: int = 16
-VIDEO_BORDER_WIDTH: int = 2
-VIDEO_BORDER_RADIUS: int = 8
 VIDEO_PLAYER_BORDER_RADIUS: int = 4
-VIDEO_CLOSE_BUTTON_RADIUS: int = 8
 VIDEO_DEFAULT_TITLE: str = "ANIMATION PREVIEW"
-VIDEO_TITLE_MAX_LENGTH: int = 30
-VIDEO_CLOSE_GLYPH: str = "✕"
+
+# COCKTAIL CANVAS POPUP
+CANVAS_POPUP_DEFAULT_WIDTH: int = 520
+CANVAS_POPUP_DEFAULT_HEIGHT: int = 320
+CANVAS_POPUP_MIN_WIDTH: int = 320
+CANVAS_POPUP_MIN_HEIGHT: int = 200
+CANVAS_POPUP_DEFAULT_TITLE: str = "COCKTAIL BUILD"
+CANVAS_POPUP_EXPORT_TEXT: str = "MP4"
+CANVAS_POPUP_EXPORTING_TEXT: str = "RENDERING..."
+COLOR_CANVAS_POPUP_BORDER: str = "#E0A96D"
+OBJECT_NAME_CANVAS_POPUP: str = "cocktailCanvasPopup"
 
 # RECIPE POPUP
 RECIPE_POPUP_DEFAULT_WIDTH: int = 380
@@ -230,6 +253,7 @@ OBJECT_NAME_RECIPE_WIDGET: str = "TopRightRecipyWidget"
 LOG_PREFIX_VOICE: str = "[Lloyd voice]"
 LOG_PREFIX_AGENT: str = "[Lloyd agent]"
 LOG_PREFIX_ERROR: str = "[Lloyd Error]"
+LOG_PREFIX_RENDER: str = "[Lloyd render]"
 
 # VOICE INPUT
 VOICE_WAKE_KEYWORD: str = "lloyd"
@@ -328,14 +352,28 @@ SPEECH_CELSIUS_REPLACEMENT: str = r"\1 degrees Celsius"
 SPEECH_SENTENCE_SPLIT_PATTERN: str = r"(?<=[.!?])\s+"
 
 # TTS
+TTS_ENGINE_PIPER: str = "piper"
+TTS_ENGINE_EDGE: str = "edge"
+TTS_ENGINE: str = TTS_ENGINE_PIPER
+
+TTS_PIPER_MODEL_PATH: str = "models/piper/en_GB-alan-medium.onnx"
+TTS_PIPER_FALLBACK_SAMPLE_RATE: int = 22050
+
 TTS_VOICE: str = "en-GB-RyanNeural"
 TTS_RATE: str = "-4%"
 TTS_PITCH: str = "-2Hz"
+
+TTS_WARMUP_TEXT: str = "Ready."
 TTS_POLL_INTERVAL_MS: int = 50
-TTS_PIPELINE_QUEUE_SIZE: int = 2
 TTS_INTER_SENTENCE_SILENCE_MS: int = 120
 TTS_AUDIO_BLOCK_FRAMES: int = 512
 TTS_AMPLITUDE_NORMALIZATION_PEAK: float = 6000.0
+
+# ANIMATION BACKEND
+ANIM_BACKEND_CANVAS: str = "canvas"
+ANIM_BACKEND_MANIM: str = "manim"
+ANIM_BACKEND_BOTH: str = "both"
+ANIM_BACKEND: str = ANIM_BACKEND_CANVAS
 
 # MANIM RENDER
 MANIM_OUTPUT_DIR: str = "output"
@@ -343,6 +381,15 @@ MANIM_TEMP_DIR_PREFIX: str = "media_temp_"
 MANIM_QUALITY: str = "low_quality"
 MANIM_VERBOSITY: str = "ERROR"
 MANIM_VIDEO_EXTENSION: str = ".mp4"
+MANIM_RENDERER: str = "cairo"
+MANIM_DISABLE_CACHING: bool = True
+MANIM_RENDER_MODULE: str = "app.render_cli"
+MANIM_RENDER_OK_MARKER: str = "RENDER_OK:"
+MANIM_RENDER_FAILED_MARKER: str = "RENDER_FAILED:"
+MANIM_SPEC_FILE_PREFIX: str = "lloyd_spec_"
+RENDER_KILL_TIMEOUT_MS: int = 3000
+MANIM_PROGRESS_BAR: str = "none"
+MANIM_SPEC_SIDECAR_EXTENSION: str = ".json"
 
 # COCKTAIL ANIMATION
 ANIM_ML_TO_HEIGHT_SCALE: float = 0.02
@@ -515,8 +562,9 @@ ANIM_GARNISH_SIDE_OFFSET: float = 0.45
 ANIM_GARNISH_Z_INDEX: int = 20
 ANIM_GARNISH_FADE_RUN_TIME: float = 0.4
 
-ANIM_DEFAULT_STEP_WAIT_S: float = 0.4
-ANIM_FINAL_WAIT_S: float = 1.5
+ANIM_DEFAULT_STEP_WAIT_S: float = 0.15
+ANIM_FINAL_WAIT_S: float = 0.6
+ANIM_ICE_CUBE_LAG_RATIO: float = 0.15
 
 ANIM_DEFAULT_COCKTAIL_NAME: str = "Cocktail"
 ANIM_DEFAULT_GLASS_TYPE: str = "rocks"
@@ -704,7 +752,40 @@ PERF_LOG_FILENAME_FORMAT: str = "%Y%m%d.jsonl"
 PERF_LOG_PREFIX: str = "[perf]"
 PERF_STAGE_COLUMN_WIDTH: int = 28
 
+# CATALOGUE
+CATALOGUE_ENABLED: bool = True
+CATALOGUE_DIR: str = "catalogue"
+CATALOGUE_SOURCES_FILE: str = "sources.json"
+CATALOGUE_MATCH_THRESHOLD: int = 88
+CATALOGUE_MAX_MESSAGE_WORDS: int = 10
+CATALOGUE_INTENT_PATTERN: str = (
+    r"\b(make|makes|making|made|build|builds|building|mix|mixes|mixing|pour|pours|"
+    r"prepare|prepares|recipe|recipes|walk me through|show me|step by step|"
+    r"how do i|how to|i want|i'd like|get me|give me|fix me|let's do)\b"
+)
+CATALOGUE_SKIP_PATTERN: str = (
+    r"\b(history|story|origin|invented|why|who|when|difference|compare|instead|"
+    r"without|substitute|variation|variations|twist|riff|rerender|re-render|"
+    r"regenerate|redo|recreate|next step|repeat)\b"
+)
+CATALOGUE_CONTEXT_TEMPLATE: str = (
+    "Session context for your memory only -- do not mention it, repeat it, or act on "
+    "it directly: earlier the user asked you to make a {name}, its recipe card and "
+    "animation are already on screen, and you already said: \"{speech}\""
+)
 
+# COCKTAIL CANVAS
+ANIM_CANVAS_SCENE_WIDTH: float = 14.2
+ANIM_CANVAS_SCENE_HEIGHT: float = 8.0
+ANIM_CANVAS_FADE_MS: int = 320
+ANIM_CANVAS_STEP_PAUSE_MS: int = 450
+ANIM_CANVAS_HOLD_MS: int = 1200
+ANIM_CANVAS_TITLE_PT: int = 18
+ANIM_CANVAS_STEP_TITLE_PT: int = 13
+ANIM_CANVAS_STEP_DESC_PT: int = 10
+ANIM_CANVAS_LABEL_PT: int = 8
+ANIM_CANVAS_LOOP_COUNT: int = -1
+ANIM_VESSEL_LABEL_OPACITY: float = 0.85
 
 
 # THREAD DIAGNOSTICS

@@ -1,38 +1,27 @@
 import asyncio
 import itertools
-import json
 import re
 import threading
-from datetime import datetime
-from pathlib import Path
 
-from claude_agent_sdk import ClaudeSDKClient, ResultMessage, AssistantMessage, TextBlock
+from claude_agent_sdk import AssistantMessage, ClaudeSDKClient, ResultMessage, TextBlock
 from claude_agent_sdk.types import StreamEvent
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from app.agent import lloyd_agent
+from app.agent import catalogue, lloyd_agent
 from app.agent.vision import analyze_bottle_photo
 from app.config import (
     AGENT_ERROR_SPEECH,
     AGENT_NOT_READY_SPEECH,
-    AGENT_RENDER_FAILED_PREFIX,
-    AGENT_RENDER_STARTED_TEXT,
-    AGENT_RENDER_STATUS_TEXT,
     AGENT_SCAN_NO_RESULT,
-    ANIM_DEFAULT_COCKTAIL_NAME,
+    CATALOGUE_CONTEXT_TEMPLATE,
     LOG_PREFIX_ERROR,
-    MANIM_OUTPUT_DIR,
-    MANIM_VIDEO_EXTENSION,
     SHUTDOWN_THREAD_TIMEOUT_MS,
     SPEECH_SENTENCE_SPLIT_PATTERN,
-    STEP_BY_STEP_DEBUG_DIR,
-    STEP_BY_STEP_RERENDER_KEYWORDS,
 )
 from app.helpers import perf
 from app.helpers.qthread_support import track
-from app.helpers.text import clean_text_for_speech, sanitize_cocktail_filename
+from app.helpers.text import clean_text_for_speech, split_into_sentences
 from app.threads.cancellable_worker import CancellableWorker
-from app.threads.manim_render_worker import ManimRenderWorker
 
 _agent_sequence = itertools.count(1)
 _SENTENCE_END = re.compile(SPEECH_SENTENCE_SPLIT_PATTERN)
@@ -55,9 +44,8 @@ class Agent(QThread):
     show_reply = pyqtSignal(str)
     show_status = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
-    render_succeeded = pyqtSignal(str)
-    video_render_started = pyqtSignal(str)
     recipe_ready = pyqtSignal(dict)
+    animation_ready = pyqtSignal(dict)
 
     _popup_requested = pyqtSignal(object)
 
@@ -74,9 +62,8 @@ class Agent(QThread):
         self._interrupted = threading.Event()
 
         self._message: str = ""
-        self._render_pending: bool = False
+        self._pending_context: list[str] = []
         self._child_workers: list[CancellableWorker] = []
-        self.manim_worker: ManimRenderWorker | None = None
 
         self._scan_popup = None
         self._scan_result_path: str | None = None
@@ -84,6 +71,10 @@ class Agent(QThread):
         self._active_scan_path: str | None = None
 
         self._popup_requested.connect(self._create_scan_popup)
+
+        loaded = catalogue.load()
+        perf.mark("catalogue.loaded")
+        print(f"[Lloyd catalogue] {loaded} entries")
 
     def is_ready(self) -> bool:
         return self._ready.is_set() and self._client is not None
@@ -132,15 +123,56 @@ class Agent(QThread):
             print(f"{LOG_PREFIX_ERROR}: agent client disconnect failed: {exc}")
 
     def submit(self, message: str) -> None:
+        self._message = message
+
+        if self._serve_from_catalogue(message):
+            return
+
         loop = self._loop
         if loop is None or not self.is_ready():
             self.show_reply.emit(AGENT_NOT_READY_SPEECH)
             self.speak_sentence.emit(AGENT_NOT_READY_SPEECH)
             self.speech_complete.emit()
             return
+
         asyncio.run_coroutine_threadsafe(self._run_turn(message), loop)
 
+    def _serve_from_catalogue(self, message: str) -> bool:
+        entry = catalogue.lookup(message)
+        if entry is None:
+            return False
+
+        perf.mark("catalogue.hit")
+        self.thinking_started.emit()
+
+        speech = str(entry.get("speech", "")).strip()
+        spoke = False
+        for sentence in split_into_sentences(speech):
+            spoke = self._speak(sentence, spoke)
+
+        recipe = entry.get("recipe")
+        if isinstance(recipe, dict):
+            self.recipe_ready.emit(dict(recipe))
+
+        animation = entry.get("animation")
+        if isinstance(animation, dict):
+            self.animation_ready.emit(dict(animation))
+
+        if speech:
+            self.show_reply.emit(speech)
+
+        self.speech_complete.emit()
+        self.thinking_ended.emit()
+
+        self._pending_context.append(
+            CATALOGUE_CONTEXT_TEMPLATE.format(
+                name=entry.get("name", ""), speech=speech
+            )
+        )
+        return True
+
     def reset_session(self) -> None:
+        self._pending_context = []
         loop = self._loop
         if loop is None or not self.is_ready():
             return
@@ -154,12 +186,18 @@ class Agent(QThread):
             except Exception as exc:
                 self.error_occurred.emit(str(exc))
 
+    def _build_prompt(self, message: str) -> str:
+        if not self._pending_context:
+            return message
+        preamble = "\n".join(self._pending_context)
+        self._pending_context = []
+        return f"{preamble}\n\n{message}"
+
     async def _run_turn(self, message: str) -> None:
         async with self._turn_lock:
             self._interrupted.clear()
-            self._message = message
-            self._render_pending = False
 
+            prompt = self._build_prompt(message)
             perf.mark("agent.query_sent")
             self.thinking_started.emit()
 
@@ -169,7 +207,7 @@ class Agent(QThread):
             spoke = False
 
             try:
-                await self._client.query(message)
+                await self._client.query(prompt)
                 async for item in self._client.receive_response():
                     if self._interrupted.is_set():
                         break
@@ -218,8 +256,7 @@ class Agent(QThread):
                 if reply:
                     self.show_reply.emit(reply)
                 self.speech_complete.emit()
-                if not self._render_pending:
-                    self.thinking_ended.emit()
+                self.thinking_ended.emit()
 
     def _speak(self, sentence: str, already_spoke: bool) -> bool:
         cleaned = clean_text_for_speech(sentence)
@@ -234,20 +271,7 @@ class Agent(QThread):
         self.recipe_ready.emit(dict(data))
 
     def on_animation(self, data: dict) -> None:
-        cocktail_name = data.get("name", ANIM_DEFAULT_COCKTAIL_NAME)
-        existing = self._existing_render_path(cocktail_name)
-
-        if existing is not None and not self._wants_rerender(self._message):
-            perf.mark("render.cached")
-            self.show_status.emit(AGENT_RENDER_STATUS_TEXT)
-            self.render_succeeded.emit(str(existing))
-            return
-
-        self._render_pending = True
-        self._dump_step_by_step_debug(data)
-        self.video_render_started.emit(cocktail_name)
-        self.show_status.emit(AGENT_RENDER_STARTED_TEXT)
-        self._start_render(json.dumps(data))
+        self.animation_ready.emit(dict(data))
 
     async def on_scan(self) -> list:
         done_event = threading.Event()
@@ -329,44 +353,8 @@ class Agent(QThread):
         if path is None:
             return
         try:
+            from pathlib import Path
+
             Path(path).unlink(missing_ok=True)
         except OSError as exc:
             print(f"{LOG_PREFIX_ERROR}: could not delete uploaded scan {path}: {exc}")
-
-    def _existing_render_path(self, cocktail_name: str) -> Path | None:
-        filename = sanitize_cocktail_filename(cocktail_name)
-        path = (Path(MANIM_OUTPUT_DIR) / f"{filename}{MANIM_VIDEO_EXTENSION}").resolve()
-        return path if path.is_file() else None
-
-    def _wants_rerender(self, message: str) -> bool:
-        lowered = message.lower()
-        return any(keyword in lowered for keyword in STEP_BY_STEP_RERENDER_KEYWORDS)
-
-    def _dump_step_by_step_debug(self, data: dict) -> None:
-        debug_dir = Path(STEP_BY_STEP_DEBUG_DIR)
-        filename = sanitize_cocktail_filename(data.get("name", ANIM_DEFAULT_COCKTAIL_NAME))
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        path = debug_dir / f"{filename}_{timestamp}.json"
-        try:
-            debug_dir.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        except OSError as exc:
-            print(f"{LOG_PREFIX_ERROR}: could not write step-by-step debug json {path}: {exc}")
-
-    def _start_render(self, recipe_json_string: str) -> None:
-        self.manim_worker = ManimRenderWorker(recipe_json_string)
-        self._spawn_child(self.manim_worker)
-        self.manim_worker.rendering_finished.connect(self._on_render_success)
-        self.manim_worker.rendering_failed.connect(self._on_render_failure)
-        self.manim_worker.start()
-
-    def _on_render_success(self, output_mp4_path: str) -> None:
-        self._render_pending = False
-        self.thinking_ended.emit()
-        self.show_status.emit(AGENT_RENDER_STATUS_TEXT)
-        self.render_succeeded.emit(output_mp4_path)
-
-    def _on_render_failure(self, error_msg: str) -> None:
-        self._render_pending = False
-        self.thinking_ended.emit()
-        self.show_status.emit(f"{AGENT_RENDER_FAILED_PREFIX} {error_msg}")

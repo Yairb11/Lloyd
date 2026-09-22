@@ -3,6 +3,13 @@ from PyQt6.QtWidgets import QHBoxLayout, QLineEdit, QPushButton, QScrollArea, QV
 from thefuzz import fuzz
 
 from app.config import (
+    ANIM_BACKEND,
+    ANIM_BACKEND_BOTH,
+    ANIM_BACKEND_CANVAS,
+    ANIM_BACKEND_MANIM,
+    AGENT_RENDER_FAILED_PREFIX,
+    AGENT_RENDER_STARTED_TEXT,
+    AGENT_RENDER_STATUS_TEXT,
     CHAT_CLEAR_COMMAND_TEXT,
     CHAT_CLEAR_VOICE_MATCH_THRESHOLD,
     CHAT_CLEAR_VOICE_PHRASE,
@@ -19,7 +26,7 @@ from app.config import (
     OBJECT_NAME_CHAT_PANEL,
     OBJECT_NAME_SEND_BUTTON,
 )
-from app.threads import Agent, LloydSpeaker
+from app.threads import Agent, LloydSpeaker, RenderController
 from app.widgets.chat_bubble import ChatBubble
 from app.widgets.typing_indicator import TypingIndicator
 from app.helpers import perf
@@ -35,7 +42,9 @@ class ChatPanel(QWidget):
         on_speaking_ended=None,
         on_speaking_amplitude=None,
         on_render_success=None,
+        on_render_ended=None,
         on_recipe_ready=None,
+        on_animation_ready=None,
         on_video_render_started=None,
         parent: QWidget | None = None
     ) -> None:
@@ -51,7 +60,9 @@ class ChatPanel(QWidget):
         self.on_speaking_ended = on_speaking_ended
         self.on_speaking_amplitude = on_speaking_amplitude
         self.on_render_success = on_render_success
+        self.on_render_ended = on_render_ended
         self.on_recipe_ready = on_recipe_ready
+        self.on_animation_ready = on_animation_ready
         self.on_video_render_started = on_video_render_started
 
         self._busy = False
@@ -65,7 +76,14 @@ class ChatPanel(QWidget):
         self.lloyd_speaker.speech_started.connect(self._on_speech_started)
         self.lloyd_speaker.speech_finished.connect(self._on_speech_finished)
         self.lloyd_speaker.amplitude_changed.connect(self._on_speaking_amplitude)
+        self.lloyd_speaker.engine_ready.connect(self._on_engine_ready)
         self.lloyd_speaker.start()
+
+        self.render_controller = RenderController(self)
+        self.render_controller.render_started.connect(self._on_render_started)
+        self.render_controller.render_finished.connect(self._on_render_finished)
+        self.render_controller.render_cached.connect(self._on_render_cached)
+        self.render_controller.render_failed.connect(self._on_render_failed)
 
         self.agent = Agent(self)
         self.agent.error_occurred.connect(self._on_agent_error)
@@ -75,9 +93,8 @@ class ChatPanel(QWidget):
         self.agent.show_status.connect(self._on_show_status)
         self.agent.thinking_started.connect(self._on_thinking_started)
         self.agent.thinking_ended.connect(self._on_thinking_ended)
-        self.agent.render_succeeded.connect(self._on_render_succeeded)
-        self.agent.video_render_started.connect(self._on_video_render_started)
         self.agent.recipe_ready.connect(self._on_recipe_ready)
+        self.agent.animation_ready.connect(self._on_animation_ready)
         self.agent.start()
 
         layout = QVBoxLayout(self)
@@ -142,6 +159,7 @@ class ChatPanel(QWidget):
             perf.start("text")
 
         self._append_bubble(message, is_user=True)
+        self.render_controller.set_last_message(message)
         self._set_busy(True)
         perf.mark("agent.submitted")
         self.agent.submit(message)
@@ -191,8 +209,11 @@ class ChatPanel(QWidget):
 
         self.agent.interrupt()
         self.lloyd_speaker.stop()
+        self.render_controller.cancel()
         self._hide_typing_indicator()
         self._set_busy(False)
+        if self.on_render_ended is not None:
+            self.on_render_ended()
         if self.on_thinking_ended is not None:
             self.on_thinking_ended()
 
@@ -202,6 +223,7 @@ class ChatPanel(QWidget):
             self.lloyd_speaker.stop()
 
     def shutdown(self) -> None:
+        self.render_controller.shutdown()
         self.agent.shutdown()
         self.lloyd_speaker.shutdown()
 
@@ -212,6 +234,9 @@ class ChatPanel(QWidget):
         self.send_button.style().unpolish(self.send_button)
         self.send_button.style().polish(self.send_button)
         self._refresh_input_locked()
+
+    def _on_engine_ready(self, name: str) -> None:
+        print(f"{LOG_PREFIX_AGENT} tts engine: {name}")
 
     def _on_speech_started(self) -> None:
         self._speaking = True
@@ -258,6 +283,35 @@ class ChatPanel(QWidget):
             return
         self.lloyd_speaker.finish()
 
+    def _on_animation_ready(self, spec: dict) -> None:
+        if ANIM_BACKEND in (ANIM_BACKEND_CANVAS, ANIM_BACKEND_BOTH):
+            if self.on_animation_ready is not None:
+                self.on_animation_ready(spec)
+        if ANIM_BACKEND in (ANIM_BACKEND_MANIM, ANIM_BACKEND_BOTH):
+            self.render_controller.request(spec)
+
+    def request_render(self, spec: dict) -> None:
+        self.render_controller.request(dict(spec))
+
+    def _on_render_started(self, cocktail_name: str) -> None:
+        self._append_bubble(AGENT_RENDER_STARTED_TEXT, is_user=False)
+        if self.on_video_render_started is not None:
+            self.on_video_render_started(cocktail_name)
+
+    def _on_render_finished(self, path: str) -> None:
+        self._append_bubble(AGENT_RENDER_STATUS_TEXT, is_user=False)
+        if self.on_render_success is not None:
+            self.on_render_success(path)
+
+    def _on_render_cached(self, path: str) -> None:
+        if self.on_render_success is not None:
+            self.on_render_success(path)
+
+    def _on_render_failed(self, message: str) -> None:
+        self._append_bubble(f"{AGENT_RENDER_FAILED_PREFIX} {message}", is_user=False)
+        if self.on_render_ended is not None:
+            self.on_render_ended()
+
     def _show_typing_indicator(self) -> None:
         if self._typing_indicator is not None:
             return
@@ -291,14 +345,6 @@ class ChatPanel(QWidget):
 
     def _on_show_status(self, text: str) -> None:
         self._append_bubble(str(text), is_user=False)
-
-    def _on_render_succeeded(self, output_mp4_path: str) -> None:
-        if self.on_render_success is not None:
-            self.on_render_success(output_mp4_path)
-
-    def _on_video_render_started(self, cocktail_name: str) -> None:
-        if self.on_video_render_started is not None:
-            self.on_video_render_started(cocktail_name)
 
     def _on_recipe_ready(self, data: dict) -> None:
         if self.on_recipe_ready is not None:

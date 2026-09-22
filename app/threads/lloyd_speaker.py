@@ -1,26 +1,20 @@
 import asyncio
-import io
 import threading
 
-import edge_tts
-import numpy as np
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from app.config import (
-    LOG_PREFIX_ERROR,
     SHUTDOWN_THREAD_TIMEOUT_MS,
     TTS_AMPLITUDE_NORMALIZATION_PEAK,
     TTS_AUDIO_BLOCK_FRAMES,
     TTS_INTER_SENTENCE_SILENCE_MS,
-    TTS_PITCH,
     TTS_POLL_INTERVAL_MS,
-    TTS_RATE,
-    TTS_VOICE,
 )
 from app.helpers import perf
-from app.helpers.audio_playback import AmplitudePlayer, decode_audio_to_pcm, silence_pcm
+from app.helpers.audio_playback import AmplitudePlayer, silence_pcm
 from app.helpers.qthread_support import track
 from app.helpers.text import split_into_sentences
+from app.helpers.tts_engine import create_engine
 
 _TURN_END = object()
 _THREAD_END = object()
@@ -30,6 +24,7 @@ class LloydSpeaker(QThread):
     speech_started = pyqtSignal()
     speech_finished = pyqtSignal()
     amplitude_changed = pyqtSignal(float)
+    engine_ready = pyqtSignal(str)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -39,6 +34,7 @@ class LloydSpeaker(QThread):
             amplitude_peak=TTS_AMPLITUDE_NORMALIZATION_PEAK,
             on_amplitude=self.amplitude_changed.emit,
         )
+        self._engine = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._queue: asyncio.Queue | None = None
         self._ready = threading.Event()
@@ -58,6 +54,11 @@ class LloydSpeaker(QThread):
     async def _serve(self) -> None:
         self._queue = asyncio.Queue()
         self._ready.set()
+
+        self._engine = create_engine()
+        await self._engine.warmup()
+        perf.mark("tts.engine_ready")
+        self.engine_ready.emit(self._engine.name)
 
         while True:
             generation, payload = await self._queue.get()
@@ -106,28 +107,12 @@ class LloydSpeaker(QThread):
         self._speaking = False
         self.speech_finished.emit()
 
-    async def _synthesize(
-        self, generation: int, sentence: str
-    ) -> tuple[np.ndarray, int] | None:
-        stream = io.BytesIO()
-        try:
-            communicate = edge_tts.Communicate(
-                sentence, TTS_VOICE, rate=TTS_RATE, pitch=TTS_PITCH
-            )
-            async for chunk in communicate.stream():
-                if generation != self._generation:
-                    return None
-                if chunk["type"] == "audio":
-                    stream.write(chunk["data"])
-        except Exception as exc:
-            print(f"{LOG_PREFIX_ERROR}: {exc}")
+    async def _synthesize(self, generation: int, sentence: str):
+        if self._engine is None:
             return None
-
-        if stream.tell() == 0:
-            return None
-
-        stream.seek(0)
-        return await asyncio.to_thread(decode_audio_to_pcm, stream.read())
+        return await self._engine.synthesize(
+            sentence, lambda: generation != self._generation
+        )
 
     def enqueue(self, sentence: str) -> None:
         if sentence.strip():

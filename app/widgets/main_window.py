@@ -5,6 +5,8 @@ from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QSplitter, QWidget
 
 from app.config import (
     APP_NAME,
+    CANVAS_POPUP_DEFAULT_HEIGHT,
+    CANVAS_POPUP_DEFAULT_WIDTH,
     FULLSCREEN_SHORTCUT_ESC,
     FULLSCREEN_SHORTCUT_F11,
     LOG_PREFIX_VOICE,
@@ -33,6 +35,7 @@ from app.theme import build_stylesheet
 from app.threads import VoiceListener
 from app.widgets.canvas_panel import CanvasPanel
 from app.widgets.chat_panel import ChatPanel
+from app.widgets.cocktail_canvas_popup import CocktailCanvasPopup
 from app.widgets.top_left_video_widget import TopLeftVideoWidget
 from app.widgets.top_right_recipes_widget import TopRightRecipyWidget
 from app.win_dark_mode import enable_dark_titlebar
@@ -65,17 +68,20 @@ class MainWindow(QMainWindow):
 
         self.canvas_panel = CanvasPanel(self.splitter)
         self.chat_panel = ChatPanel(
-            on_thinking_started=self._on_thinking_started, 
+            on_thinking_started=self._on_thinking_started,
             on_thinking_ended=self._on_thinking_ended,
             on_voice_transcription_ended=self._on_transcribing_ended,
             on_speaking_started=self._on_speaking_started,
             on_speaking_ended=self._on_speaking_ended,
             on_speaking_amplitude=self._on_speaking_amplitude,
             on_render_success=self._on_render_success,
+            on_render_ended=self._on_render_ended,
             on_recipe_ready=self._on_recipe_ready,
+            on_animation_ready=self._on_animation_ready,
             on_video_render_started=self._on_video_render_started,
             parent=self.splitter
         )
+
         self.splitter.addWidget(self.canvas_panel)
         self.splitter.addWidget(self.chat_panel)
         self.splitter.setStretchFactor(0, SPLITTER_STRETCH_CANVAS)
@@ -93,23 +99,32 @@ class MainWindow(QMainWindow):
         self.canvas_panel.mute_button.toggled.connect(self._on_mute_toggle)
 
         self.video_preview = TopLeftVideoWidget(self, width=VIDEO_PREVIEW_DEFAULT_WIDTH, height=VIDEO_PREVIEW_DEFAULT_HEIGHT)
-        self.video_preview.move(VIDEO_PREVIEW_POSITION_OFFSET, VIDEO_PREVIEW_POSITION_OFFSET)
         self.video_preview.hide()
+
+        self.cocktail_popup = CocktailCanvasPopup(self, width=CANVAS_POPUP_DEFAULT_WIDTH, height=CANVAS_POPUP_DEFAULT_HEIGHT)
+        self.cocktail_popup.export_requested.connect(self._on_export_requested)
+        self.cocktail_popup.hide()
 
         self.recipe_widget = TopRightRecipyWidget(self, width=RECIPE_POPUP_DEFAULT_WIDTH, height=RECIPE_POPUP_DEFAULT_HEIGHT)
         self.recipe_widget.hide()
-        self._reposition_recipe_widget()
+
+        self._reset_hud_positions()
         self._raise_hud_widgets()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self.video_preview.move(VIDEO_PREVIEW_POSITION_OFFSET, VIDEO_PREVIEW_POSITION_OFFSET)
         self._reposition_recipe_widget()
         self._raise_hud_widgets()
 
     def _on_splitter_moved(self, pos: int, index: int) -> None:
         self._reposition_recipe_widget()
         self._raise_hud_widgets()
+
+    def _reset_hud_positions(self) -> None:
+        corner = QPoint(VIDEO_PREVIEW_POSITION_OFFSET, VIDEO_PREVIEW_POSITION_OFFSET)
+        self.video_preview.move(corner)
+        self.cocktail_popup.move(corner)
+        self._reposition_recipe_widget()
 
     def _reposition_recipe_widget(self) -> None:
         x_in_canvas = self.canvas_panel.width() - self.recipe_widget.width() - RECIPE_POPUP_POSITION_OFFSET
@@ -119,6 +134,7 @@ class MainWindow(QMainWindow):
     def _raise_hud_widgets(self) -> None:
         self.recipe_widget.raise_()
         self.video_preview.raise_()
+        self.cocktail_popup.raise_()
 
     def _setup_shortcuts(self) -> None:
         QShortcut(QKeySequence(FULLSCREEN_SHORTCUT_F11), self, activated=self.toggle_fullscreen)
@@ -127,6 +143,12 @@ class MainWindow(QMainWindow):
     def _on_escape_pressed(self) -> None:
         if self.recipe_widget.isVisible():
             self.recipe_widget.hide()
+            return
+        if self.cocktail_popup.isVisible():
+            self.cocktail_popup.close_panel()
+            return
+        if self.video_preview.isVisible():
+            self.video_preview.close_panel()
             return
         self.toggle_fullscreen()
 
@@ -207,11 +229,10 @@ class MainWindow(QMainWindow):
             self.canvas_panel.sphere.enter_thinking()
             return
 
-        if self._agent_busy or self._transcribing:
-            if self._is_rendering:
-                self.canvas_panel.sphere.enter_rendering()
-            else:
-                self.canvas_panel.sphere.enter_thinking()
+        if self._is_rendering:
+            self.canvas_panel.sphere.enter_rendering()
+        elif self._agent_busy or self._transcribing:
+            self.canvas_panel.sphere.enter_thinking()
         elif self._tts_speaking:
             self.canvas_panel.sphere.enter_speaking()
         else:
@@ -224,24 +245,47 @@ class MainWindow(QMainWindow):
 
     def _on_thinking_started(self):
         self._agent_busy = True
-        self._is_rendering = False
         self._refresh_busy_visuals()
 
     def _on_thinking_ended(self):
         self._agent_busy = False
-        self._is_rendering = False
         self._refresh_busy_visuals()
+
+    def _on_animation_ready(self, spec: dict):
+        self.video_preview.close_panel()
+        self.cocktail_popup.play(spec)
+        self._raise_hud_widgets()
+
+    def _on_export_requested(self, spec: dict):
+        self.chat_panel.request_render(spec)
 
     def _on_speaking_amplitude(self, level: float) -> None:
         self.canvas_panel.sphere.update_speaking_amplitude(level)
 
     def _on_render_success(self, output_mp4_path: str):
+        self._is_rendering = False
+        self.cocktail_popup.export_settled()
+
+        geometry = self.cocktail_popup.geometry()
+        was_visible = self.cocktail_popup.isVisible()
+        self.cocktail_popup.close_panel()
+
+        if was_visible:
+            self.video_preview.setGeometry(geometry)
         self.video_preview.play_video(output_mp4_path, title=Path(output_mp4_path).stem)
+
         self._raise_hud_widgets()
+        self._refresh_busy_visuals()
+
+    def _on_render_ended(self):
+        self._is_rendering = False
+        self.cocktail_popup.export_settled()
+        self._refresh_busy_visuals()
 
     def _on_video_render_started(self, cocktail_name: str):
         self._is_rendering = True
-        self.video_preview.show_preparing(f"Creating {cocktail_name}...")
+        if not self.cocktail_popup.isVisible():
+            self.video_preview.show_preparing(f"Creating {cocktail_name}...")
         self._refresh_busy_visuals()
         self._raise_hud_widgets()
 
@@ -292,6 +336,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:
         qthread_support.log_running("closeEvent")
         self.voice_listener.stop()
+        self.cocktail_popup.stop()
         self.chat_panel.shutdown()
         self.recipe_widget.shutdown()
 

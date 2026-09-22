@@ -17,14 +17,6 @@ def silence_pcm(duration_ms: int, sample_rate: int) -> np.ndarray:
 
 
 class AmplitudePlayer:
-    """Continuous, gapless mono PCM playback with per-block loudness reporting.
-
-    Sentences are fed in as they're synthesized; the output stream keeps
-    running (emitting silence if the buffer runs dry) instead of being
-    stopped and restarted per sentence, which is what made the old
-    per-sentence pygame playback sound choppy between sentences.
-    """
-
     def __init__(
         self,
         block_frames: int,
