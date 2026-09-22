@@ -8,15 +8,12 @@ from claude_agent_sdk import (
     ResultMessage, TextBlock,
 )
 
+from app.agent.tools.scan_shelf import VISION_PROMPT
 from app.config import (
     AGENT_ENV, AGENT_MODEL, AGENT_PERMISSION_MODE,
-    AGENT_SCAN_DEFAULT_MEDIA_TYPE, AGENT_SCAN_PROMPT_PATH,
+    AGENT_SCAN_DEFAULT_MEDIA_TYPE,
 )
 from app.core.paths import PROJECT_ROOT
-
-SCAN_PROMPT: str = (
-    (PROJECT_ROOT / AGENT_SCAN_PROMPT_PATH).read_text(encoding="utf-8").strip()
-)
 
 
 def parse_beverage_list(raw: str) -> list:
@@ -38,7 +35,7 @@ def parse_beverage_list(raw: str) -> list:
 
 def _vision_options() -> ClaudeAgentOptions:
     return ClaudeAgentOptions(
-        system_prompt=SCAN_PROMPT,
+        system_prompt=VISION_PROMPT,
         model=AGENT_MODEL,
         tools=[],
         setting_sources=[],
@@ -70,7 +67,7 @@ async def analyze_bottle_photo(image_path: str) -> list:
                             "data": encoded,
                         },
                     },
-                    {"type": "text", "text": SCAN_PROMPT},
+                    {"type": "text", "text": VISION_PROMPT},
                 ],
             },
         }
