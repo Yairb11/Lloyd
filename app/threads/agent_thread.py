@@ -9,15 +9,13 @@ from PyQt6.QtCore import QThread, pyqtSignal
 
 from app.agent import client
 from app.agent.vision import analyze_bottle_photo
-from app.catalogue import find_entry, load_entries
 from app.config import (
     AGENT_ERROR_SPEECH, AGENT_NOT_READY_SPEECH, AGENT_SCAN_NO_RESULT,
-    CATALOGUE_CONTEXT_TEMPLATE, LOG_PREFIX_ERROR, SHUTDOWN_THREAD_TIMEOUT_MS,
-    SPEECH_SENTENCE_SPLIT_PATTERN,
+    LOG_PREFIX_ERROR, SHUTDOWN_THREAD_TIMEOUT_MS, SPEECH_SENTENCE_SPLIT_PATTERN,
 )
 from app.core import perf
 from app.core.qthread_support import track
-from app.core.text import clean_text_for_speech, split_into_sentences
+from app.core.text import clean_text_for_speech
 from app.threads.cancellable_worker import CancellableWorker
 
 _agent_sequence = itertools.count(1)
@@ -58,8 +56,6 @@ class Agent(QThread):
         self._ready = threading.Event()
         self._interrupted = threading.Event()
 
-        self._message: str = ""
-        self._pending_context: list[str] = []
         self._child_workers: list[CancellableWorker] = []
 
         self._scan_popup = None
@@ -68,10 +64,6 @@ class Agent(QThread):
         self._active_scan_path: str | None = None
 
         self._popup_requested.connect(self._create_scan_popup)
-
-        loaded = load_entries()
-        perf.mark("catalogue.loaded")
-        print(f"[Lloyd catalogue] {loaded} entries")
 
     def is_ready(self) -> bool:
         return self._ready.is_set() and self._client is not None
@@ -120,11 +112,6 @@ class Agent(QThread):
             print(f"{LOG_PREFIX_ERROR}: agent client disconnect failed: {exc}")
 
     def submit(self, message: str) -> None:
-        self._message = message
-
-        if self._serve_from_catalogue(message):
-            return
-
         loop = self._loop
         if loop is None or not self.is_ready():
             self.show_reply.emit(AGENT_NOT_READY_SPEECH)
@@ -134,42 +121,7 @@ class Agent(QThread):
 
         asyncio.run_coroutine_threadsafe(self._run_turn(message), loop)
 
-    def _serve_from_catalogue(self, message: str) -> bool:
-        entry = find_entry(message)
-        if entry is None:
-            return False
-
-        perf.mark("catalogue.hit")
-        self.thinking_started.emit()
-
-        speech = str(entry.get("speech", "")).strip()
-        spoke = False
-        for sentence in split_into_sentences(speech):
-            spoke = self._speak(sentence, spoke)
-
-        recipe = entry.get("recipe")
-        if isinstance(recipe, dict):
-            self.recipe_ready.emit(dict(recipe))
-
-        animation = entry.get("animation")
-        if isinstance(animation, dict):
-            self.animation_ready.emit(dict(animation))
-
-        if speech:
-            self.show_reply.emit(speech)
-
-        self.speech_complete.emit()
-        self.thinking_ended.emit()
-
-        self._pending_context.append(
-            CATALOGUE_CONTEXT_TEMPLATE.format(
-                name=entry.get("name", ""), speech=speech
-            )
-        )
-        return True
-
     def reset_session(self) -> None:
-        self._pending_context = []
         loop = self._loop
         if loop is None or not self.is_ready():
             return
@@ -183,18 +135,10 @@ class Agent(QThread):
             except Exception as exc:
                 self.error_occurred.emit(str(exc))
 
-    def _build_prompt(self, message: str) -> str:
-        if not self._pending_context:
-            return message
-        preamble = "\n".join(self._pending_context)
-        self._pending_context = []
-        return f"{preamble}\n\n{message}"
-
     async def _run_turn(self, message: str) -> None:
         async with self._turn_lock:
             self._interrupted.clear()
 
-            prompt = self._build_prompt(message)
             perf.mark("agent.query_sent")
             self.thinking_started.emit()
 
@@ -204,7 +148,7 @@ class Agent(QThread):
             spoke = False
 
             try:
-                await self._client.query(prompt)
+                await self._client.query(message)
                 async for item in self._client.receive_response():
                     if self._interrupted.is_set():
                         break
