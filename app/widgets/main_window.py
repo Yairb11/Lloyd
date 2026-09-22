@@ -1,6 +1,6 @@
 from pathlib import Path
-from PyQt6.QtCore import QByteArray, QPoint, QSettings, Qt
-from PyQt6.QtGui import QCloseEvent, QKeySequence, QShortcut, QShowEvent
+from PyQt6.QtCore import QByteArray, QEvent, QPoint, QSettings, Qt
+from PyQt6.QtGui import QCloseEvent, QKeySequence, QMoveEvent, QResizeEvent, QShortcut, QShowEvent
 from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QSplitter, QWidget
 
 from app.config import (
@@ -8,16 +8,17 @@ from app.config import (
     FULLSCREEN_SHORTCUT_ESC, FULLSCREEN_SHORTCUT_F11, LOG_PREFIX_VOICE,
     MIC_BUTTON_LISTENING_TEXT, MIC_BUTTON_MUTED_TEXT, ORG_NAME,
     RECIPE_POPUP_DEFAULT_HEIGHT, RECIPE_POPUP_DEFAULT_WIDTH, RECIPE_POPUP_POSITION_OFFSET,
-    SETTINGS_GEOMETRY_KEY, SETTINGS_SPLITTER_STATE_KEY, SPLITTER_DEFAULT_CANVAS_RATIO,
-    SPLITTER_DEFAULT_CHAT_RATIO, SPLITTER_HANDLE_WIDTH, SPLITTER_STRETCH_CANVAS,
-    SPLITTER_STRETCH_CHAT, VIDEO_PREVIEW_DEFAULT_HEIGHT, VIDEO_PREVIEW_DEFAULT_WIDTH,
-    VIDEO_PREVIEW_POSITION_OFFSET, VOICE_MSG_NO_COMMAND_HEARD, WINDOW_MIN_HEIGHT,
-    WINDOW_MIN_WIDTH, WINDOW_TITLE,
+    SETTINGS_SPLITTER_STATE_KEY, SPLITTER_DEFAULT_CANVAS_RATIO, SPLITTER_DEFAULT_CHAT_RATIO,
+    SPLITTER_HANDLE_WIDTH, SPLITTER_STRETCH_CANVAS, SPLITTER_STRETCH_CHAT,
+    VIDEO_PREVIEW_DEFAULT_HEIGHT, VIDEO_PREVIEW_DEFAULT_WIDTH, VIDEO_PREVIEW_POSITION_OFFSET,
+    VOICE_MSG_NO_COMMAND_HEARD, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH,
+    WINDOW_TITLE,
 )
 from app.core import perf, qthread_support
 from app.threads import VoiceListener
 from app.widget_helpers.stylesheet import build_stylesheet
 from app.widget_helpers.win_dark_mode import enable_dark_titlebar
+from app.widget_helpers.window_placement import WindowPlacementManager
 from app.widgets.canvas_panel import CanvasPanel
 from app.widgets.chat_panel import ChatPanel
 from app.widgets.cocktail_canvas_popup import CocktailCanvasPopup
@@ -28,11 +29,14 @@ from app.widgets.video_panel import TopLeftVideoWidget
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
+
+        self._placement: WindowPlacementManager | None = None
+        self._hud_ready: bool = False
+
         self.setWindowTitle(WINDOW_TITLE)
         self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
         self.setStyleSheet(build_stylesheet())
 
-        self._is_fullscreen: bool = False
         self._dark_titlebar_applied: bool = False
 
         self._agent_busy: bool = False
@@ -91,13 +95,26 @@ class MainWindow(QMainWindow):
         self.recipe_widget = TopRightRecipyWidget(self, width=RECIPE_POPUP_DEFAULT_WIDTH, height=RECIPE_POPUP_DEFAULT_HEIGHT)
         self.recipe_widget.hide()
 
+        self._hud_ready = True
         self._reset_hud_positions()
         self._raise_hud_widgets()
 
-    def resizeEvent(self, event):
+    def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
+        if self._placement is not None:
+            self._placement.schedule_save()
         self._reposition_recipe_widget()
         self._raise_hud_widgets()
+
+    def moveEvent(self, event: QMoveEvent) -> None:
+        super().moveEvent(event)
+        if self._placement is not None:
+            self._placement.schedule_save()
+
+    def changeEvent(self, event: QEvent) -> None:
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.WindowStateChange and self._placement is not None:
+            self._placement.schedule_save()
 
     def _on_splitter_moved(self, pos: int, index: int) -> None:
         self._reposition_recipe_widget()
@@ -110,11 +127,15 @@ class MainWindow(QMainWindow):
         self._reposition_recipe_widget()
 
     def _reposition_recipe_widget(self) -> None:
+        if not self._hud_ready:
+            return
         x_in_canvas = self.canvas_panel.width() - self.recipe_widget.width() - RECIPE_POPUP_POSITION_OFFSET
         top_right = self.canvas_panel.mapTo(self, QPoint(x_in_canvas, RECIPE_POPUP_POSITION_OFFSET))
         self.recipe_widget.move(top_right)
 
     def _raise_hud_widgets(self) -> None:
+        if not self._hud_ready:
+            return
         self.recipe_widget.raise_()
         self.video_preview.raise_()
         self.cocktail_popup.raise_()
@@ -136,22 +157,16 @@ class MainWindow(QMainWindow):
         self.toggle_fullscreen()
 
     def _restore_settings(self) -> None:
+        self._placement = WindowPlacementManager(self)
+        self._placement.restore()
+
         settings = QSettings(ORG_NAME, APP_NAME)
-
-        geometry = settings.value(SETTINGS_GEOMETRY_KEY)
-        if isinstance(geometry, QByteArray):
-            self.restoreGeometry(geometry)
-        else:
-            self.resize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
-
         splitter_state = settings.value(SETTINGS_SPLITTER_STATE_KEY)
         if isinstance(splitter_state, QByteArray):
             self.splitter.restoreState(splitter_state)
         else:
             width = self.width()
             self.splitter.setSizes([int(width * SPLITTER_DEFAULT_CANVAS_RATIO), int(width * SPLITTER_DEFAULT_CHAT_RATIO)])
-
-        self._is_fullscreen = self.isFullScreen()
 
     def _setup_voice_listener(self) -> None:
         self.voice_listener = VoiceListener(self)
@@ -303,28 +318,30 @@ class MainWindow(QMainWindow):
         self.chat_panel.set_speech_muted(checked)
 
     def toggle_fullscreen(self) -> None:
-        if self._is_fullscreen:
+        if self.isFullScreen():
             self.showNormal()
-            self._is_fullscreen = False
         else:
             self.showFullScreen()
-            self._is_fullscreen = True
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
         if not self._dark_titlebar_applied:
             enable_dark_titlebar(int(self.winId()))
             self._dark_titlebar_applied = True
+        if self._placement is not None:
+            self._placement.confirm_placement()
 
     def closeEvent(self, event: QCloseEvent) -> None:
         qthread_support.log_running("closeEvent")
+
+        if self._placement is not None:
+            self._placement.save_now()
+        settings = QSettings(ORG_NAME, APP_NAME)
+        settings.setValue(SETTINGS_SPLITTER_STATE_KEY, self.splitter.saveState())
+
         self.voice_listener.stop()
         self.cocktail_popup.stop()
         self.chat_panel.shutdown()
         self.recipe_widget.shutdown()
-
-        settings = QSettings(ORG_NAME, APP_NAME)
-        settings.setValue(SETTINGS_GEOMETRY_KEY, self.saveGeometry())
-        settings.setValue(SETTINGS_SPLITTER_STATE_KEY, self.splitter.saveState())
 
         super().closeEvent(event)
