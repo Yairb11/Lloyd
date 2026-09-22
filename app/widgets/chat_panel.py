@@ -18,13 +18,11 @@ from app.config import (
     OBJECT_NAME_CHAT_HISTORY,
     OBJECT_NAME_CHAT_PANEL,
     OBJECT_NAME_SEND_BUTTON,
-    SHUTDOWN_THREAD_TIMEOUT_MS,
 )
-from app.helpers.text import clean_text_for_speech
 from app.threads import Agent, LloydSpeaker
 from app.widgets.chat_bubble import ChatBubble
 from app.widgets.typing_indicator import TypingIndicator
-from app.helpers import perf, qthread_support
+from app.helpers import perf
 
 
 class ChatPanel(QWidget):
@@ -55,18 +53,32 @@ class ChatPanel(QWidget):
         self.on_render_success = on_render_success
         self.on_recipe_ready = on_recipe_ready
         self.on_video_render_started = on_video_render_started
-        self.agent = None
+
         self._busy = False
         self._speaking = False
         self._voice_transcribing = False
-        self._session_id: str | None = None
+        self._speech_muted = False
+        self._typing_indicator: TypingIndicator | None = None
+        self._voice_transcribing_indicator: TypingIndicator | None = None
+
         self.lloyd_speaker = LloydSpeaker(self)
         self.lloyd_speaker.speech_started.connect(self._on_speech_started)
         self.lloyd_speaker.speech_finished.connect(self._on_speech_finished)
         self.lloyd_speaker.amplitude_changed.connect(self._on_speaking_amplitude)
-        self._speech_muted = False
-        self._typing_indicator: TypingIndicator | None = None
-        self._voice_transcribing_indicator: TypingIndicator | None = None
+        self.lloyd_speaker.start()
+
+        self.agent = Agent(self)
+        self.agent.error_occurred.connect(self._on_agent_error)
+        self.agent.speak_sentence.connect(self._on_speak_sentence)
+        self.agent.speech_complete.connect(self._on_speech_complete)
+        self.agent.show_reply.connect(self._on_show_reply)
+        self.agent.show_status.connect(self._on_show_status)
+        self.agent.thinking_started.connect(self._on_thinking_started)
+        self.agent.thinking_ended.connect(self._on_thinking_ended)
+        self.agent.render_succeeded.connect(self._on_render_succeeded)
+        self.agent.video_render_started.connect(self._on_video_render_started)
+        self.agent.recipe_ready.connect(self._on_recipe_ready)
+        self.agent.start()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(CHAT_PANEL_MARGIN, CHAT_PANEL_MARGIN, CHAT_PANEL_MARGIN, CHAT_PANEL_MARGIN)
@@ -130,21 +142,9 @@ class ChatPanel(QWidget):
             perf.start("text")
 
         self._append_bubble(message, is_user=True)
-        qthread_support.retire(self.agent)
-        self.agent = Agent(message, session_id=self._session_id)
-        self.agent.error_occurred.connect(self._on_agent_error)
-        self.agent.show_reply.connect(self._on_show_reply)
-        self.agent.show_status.connect(self._on_show_status)
-        self.agent.thinking_started.connect(self._on_thinking_started)
-        self.agent.thinking_ended.connect(self._on_thinking_ended)
-        self.agent.render_succeeded.connect(self._on_render_succeeded)
-        self.agent.video_render_started.connect(self._on_video_render_started)
-        self.agent.recipe_ready.connect(self._on_recipe_ready)
-        self.agent.session_id_updated.connect(self._on_session_id_updated)
-
         self._set_busy(True)
         perf.mark("agent.submitted")
-        self.agent.start()
+        self.agent.submit(message)
 
     def _is_clear_chat_command(self, message: str, *, via_voice: bool) -> bool:
         normalized = message.lower()
@@ -158,7 +158,7 @@ class ChatPanel(QWidget):
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
-        self._session_id = None
+        self.agent.reset_session()
 
     def start_voice_transcription(self) -> None:
         if self._busy or self._voice_transcribing:
@@ -189,18 +189,12 @@ class ChatPanel(QWidget):
                 self.on_voice_transcription_ended()
             return
 
-        if self.agent is not None:
-            agent = self.agent
-            self.agent = None
-            agent.interrupt()
-            qthread_support.retire(agent)
-
+        self.agent.interrupt()
         self.lloyd_speaker.stop()
         self._hide_typing_indicator()
         self._set_busy(False)
         if self.on_thinking_ended is not None:
             self.on_thinking_ended()
-
 
     def set_speech_muted(self, muted: bool) -> None:
         self._speech_muted = muted
@@ -208,11 +202,8 @@ class ChatPanel(QWidget):
             self.lloyd_speaker.stop()
 
     def shutdown(self) -> None:
-        if self.agent is not None:
-            self.agent.shutdown()
-            self.agent = None
-        qthread_support.stop_retired(SHUTDOWN_THREAD_TIMEOUT_MS)
-        self.lloyd_speaker.stop()
+        self.agent.shutdown()
+        self.lloyd_speaker.shutdown()
 
     def _set_busy(self, busy: bool) -> None:
         self._busy = busy
@@ -243,24 +234,33 @@ class ChatPanel(QWidget):
         self.send_button.setEnabled(not self._speaking)
 
     def _on_agent_error(self, message: str) -> None:
-        if self.sender() is not self.agent:
-            return
         print(f"{LOG_PREFIX_AGENT} {message}")
 
     def _on_thinking_started(self) -> None:
-        if self.sender() is not self.agent:
-            return
-        self.on_thinking_started()
+        if self.on_thinking_started is not None:
+            self.on_thinking_started()
         self._show_typing_indicator()
 
     def _on_thinking_ended(self) -> None:
-        if self.sender() is not self.agent:
-            return
-        self.on_thinking_ended()
+        if self.on_thinking_ended is not None:
+            self.on_thinking_ended()
         self._hide_typing_indicator()
         self._set_busy(False)
 
+    def _on_speak_sentence(self, sentence: str) -> None:
+        if self._speech_muted:
+            return
+        perf.mark("tts.requested", once=True)
+        self.lloyd_speaker.enqueue(sentence)
+
+    def _on_speech_complete(self) -> None:
+        if self._speech_muted:
+            return
+        self.lloyd_speaker.finish()
+
     def _show_typing_indicator(self) -> None:
+        if self._typing_indicator is not None:
+            return
         self._typing_indicator = TypingIndicator(self.history_content)
         self.history_layout.insertWidget(self.history_layout.count() - 1, self._typing_indicator)
         QTimer.singleShot(0, self._scroll_to_bottom)
@@ -287,43 +287,20 @@ class ChatPanel(QWidget):
         self._voice_transcribing_indicator = None
 
     def _on_show_reply(self, reply: str) -> None:
-        if self.sender() is not self.agent:
-            return
         self._append_bubble(str(reply), is_user=False)
 
-        if self._speech_muted:
-            return
-
-        speech_text = clean_text_for_speech(str(reply))
-        if speech_text:
-            perf.mark("tts.requested")
-            self.lloyd_speaker.speak(speech_text)
-
     def _on_show_status(self, text: str) -> None:
-        if self.sender() is not self.agent:
-            return
         self._append_bubble(str(text), is_user=False)
 
-    def _on_session_id_updated(self, session_id: str) -> None:
-        if self.sender() is not self.agent:
-            return
-        self._session_id = session_id
-
     def _on_render_succeeded(self, output_mp4_path: str) -> None:
-        if self.sender() is not self.agent:
-            return
         if self.on_render_success is not None:
             self.on_render_success(output_mp4_path)
 
     def _on_video_render_started(self, cocktail_name: str) -> None:
-        if self.sender() is not self.agent:
-            return
         if self.on_video_render_started is not None:
             self.on_video_render_started(cocktail_name)
 
     def _on_recipe_ready(self, data: dict) -> None:
-        if self.sender() is not self.agent:
-            return
         if self.on_recipe_ready is not None:
             self.on_recipe_ready(data)
 

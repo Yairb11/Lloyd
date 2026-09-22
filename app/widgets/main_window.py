@@ -29,7 +29,6 @@ from app.config import (
     WINDOW_MIN_WIDTH,
     WINDOW_TITLE,
 )
-from app.setup import shutdown_mcp_server
 from app.theme import build_stylesheet
 from app.threads import VoiceListener
 from app.widgets.canvas_panel import CanvasPanel
@@ -299,7 +298,5 @@ class MainWindow(QMainWindow):
         settings = QSettings(ORG_NAME, APP_NAME)
         settings.setValue(SETTINGS_GEOMETRY_KEY, self.saveGeometry())
         settings.setValue(SETTINGS_SPLITTER_STATE_KEY, self.splitter.saveState())
-
-        shutdown_mcp_server()
 
         super().closeEvent(event)

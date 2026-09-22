@@ -1,192 +1,304 @@
-import json
-import subprocess
-import threading
-from pathlib import Path
-from datetime import datetime
-from PyQt6.QtCore import QThread, pyqtSignal
-from jsonschema import ValidationError, validate
+import asyncio
 import itertools
+import json
+import re
+import threading
+from datetime import datetime
+from pathlib import Path
 
-from app.helpers.qthread_support import track
-from app.agent import ask_bartender
-from app.agent.step_by_step_schema import STEP_BY_STEP_SCHEMA
+from claude_agent_sdk import ClaudeSDKClient, ResultMessage, AssistantMessage, TextBlock
+from claude_agent_sdk.types import StreamEvent
+from PyQt6.QtCore import QThread, pyqtSignal
+
+from app.agent import lloyd_agent
+from app.agent.vision import analyze_bottle_photo
 from app.config import (
-    AGENT_CLARIFY_OPERATION,
     AGENT_ERROR_SPEECH,
-    AGENT_INVALID_RECIPE_SPEECH,
-    AGENT_INVALID_STEP_BY_STEP_SPEECH,
-    AGENT_RECIPE_OPERATION,
-    AGENT_RECIPE_REQUIRED_KEYS,
+    AGENT_NOT_READY_SPEECH,
+    AGENT_RENDER_FAILED_PREFIX,
     AGENT_RENDER_STARTED_TEXT,
     AGENT_RENDER_STATUS_TEXT,
-    AGENT_STEP_BY_STEP_OPERATION,
+    AGENT_SCAN_NO_RESULT,
+    ANIM_DEFAULT_COCKTAIL_NAME,
     LOG_PREFIX_ERROR,
     MANIM_OUTPUT_DIR,
     MANIM_VIDEO_EXTENSION,
-    STEP_BY_STEP_RERENDER_KEYWORDS,
+    SHUTDOWN_THREAD_TIMEOUT_MS,
+    SPEECH_SENTENCE_SPLIT_PATTERN,
     STEP_BY_STEP_DEBUG_DIR,
+    STEP_BY_STEP_RERENDER_KEYWORDS,
 )
-from app.helpers.text import sanitize_cocktail_filename
+from app.helpers import perf
+from app.helpers.qthread_support import track
+from app.helpers.text import clean_text_for_speech, sanitize_cocktail_filename
 from app.threads.cancellable_worker import CancellableWorker
 from app.threads.manim_render_worker import ManimRenderWorker
-from app.helpers import perf
 
 _agent_sequence = itertools.count(1)
+_SENTENCE_END = re.compile(SPEECH_SENTENCE_SPLIT_PATTERN)
+
+
+def split_completed_sentences(buffer: str) -> tuple[list[str], str]:
+    parts = _SENTENCE_END.split(buffer)
+    if len(parts) == 1:
+        return [], buffer
+    completed = [part.strip() for part in parts[:-1] if part.strip()]
+    return completed, parts[-1]
+
 
 class Agent(QThread):
+    agent_ready = pyqtSignal()
     thinking_started = pyqtSignal()
     thinking_ended = pyqtSignal()
+    speak_sentence = pyqtSignal(str)
+    speech_complete = pyqtSignal()
     show_reply = pyqtSignal(str)
     show_status = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
     render_succeeded = pyqtSignal(str)
     video_render_started = pyqtSignal(str)
     recipe_ready = pyqtSignal(dict)
-    session_id_updated = pyqtSignal(str)
 
     _popup_requested = pyqtSignal(object)
 
-    def __init__(self, message: str, session_id: str | None = None, parent=None) -> None:
+    def __init__(self, parent=None) -> None:
         super().__init__(parent=parent)
         track(self, f"Agent-{next(_agent_sequence)}")
-        self.message = message
-        self.session_id = session_id
-        self._paused = threading.Event()
+
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._client: ClaudeSDKClient | None = None
+        self._options = None
+        self._shutdown_event: asyncio.Event | None = None
+        self._turn_lock: asyncio.Lock | None = None
+        self._ready = threading.Event()
         self._interrupted = threading.Event()
-        self._cli_process: subprocess.Popen | None = None
+
+        self._message: str = ""
+        self._render_pending: bool = False
         self._child_workers: list[CancellableWorker] = []
-        self.manim_worker = None
+        self.manim_worker: ManimRenderWorker | None = None
+
         self._scan_popup = None
         self._scan_result_path: str | None = None
+        self._scan_error: str | None = None
         self._active_scan_path: str | None = None
 
         self._popup_requested.connect(self._create_scan_popup)
 
+    def is_ready(self) -> bool:
+        return self._ready.is_set() and self._client is not None
+
     def run(self) -> None:
-        self.thinking_started.emit()
-
-        perf.mark("agent.query_sent")
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
         try:
-            envelope = ask_bartender(
-                self.message, self.session_id, on_process_started=self._on_cli_process_started
-            )
+            self._loop.run_until_complete(self._serve())
+        finally:
+            self._loop.close()
+            self._loop = None
+
+    async def _serve(self) -> None:
+        self._shutdown_event = asyncio.Event()
+        self._turn_lock = asyncio.Lock()
+        self._options = lloyd_agent.build_options(self)
+
+        try:
+            await self._open_client()
         except Exception as exc:
-            if self._interrupted.is_set():
-                return
+            self._ready.set()
             self.error_occurred.emit(str(exc))
-            self.show_reply.emit(AGENT_ERROR_SPEECH)
-            self.thinking_ended.emit()
-            return
-        perf.mark("agent.reply_ready")
-
-        if self._interrupted.is_set():
             return
 
-        current_session_id = envelope.get("session_id") or self.session_id
+        perf.mark("agent.client_ready")
+        self._ready.set()
+        self.agent_ready.emit()
 
-        if envelope.get("operation") == AGENT_CLARIFY_OPERATION:
-            self.scan_image()
+        await self._shutdown_event.wait()
+        await self._close_client()
 
-            if self._interrupted.is_set() or self._scan_result_path is None:
-                return
+    async def _open_client(self) -> None:
+        client = ClaudeSDKClient(options=self._options)
+        await client.connect()
+        self._client = client
 
-            self._active_scan_path = self._scan_result_path
-            perf.mark("agent.scan_query_sent")
-            try:
-                envelope = ask_bartender(
-                    self._scan_result_path,
-                    current_session_id,
-                    on_process_started=self._on_cli_process_started,
-                )
-            except Exception as exc:
-                if self._interrupted.is_set():
-                    return
-                self.error_occurred.emit(str(exc))
-                self.show_reply.emit(AGENT_ERROR_SPEECH)
-                self.thinking_ended.emit()
-                return
-            finally:
-                self._cleanup_scan_file()
-            perf.mark("agent.scan_reply_ready")
-
-            if self._interrupted.is_set():
-                return
-
-            current_session_id = envelope.get("session_id") or current_session_id
-
-            if envelope.get("operation") == AGENT_CLARIFY_OPERATION:
-                self.error_occurred.emit("scan still needs a path after auto-fulfillment")
-                self.show_reply.emit(AGENT_ERROR_SPEECH)
-                self.thinking_ended.emit()
-                if current_session_id:
-                    self.session_id_updated.emit(current_session_id)
-                return
-
-        operation = envelope.get("operation")
-
-        if operation == AGENT_RECIPE_OPERATION:
-            data = envelope.get("data")
-            if not isinstance(data, dict) or not all(k in data for k in AGENT_RECIPE_REQUIRED_KEYS):
-                self.thinking_ended.emit()
-                self.show_reply.emit(envelope.get("speech") or AGENT_INVALID_RECIPE_SPEECH)
-            else:
-                self.thinking_ended.emit()
-                self.show_reply.emit(envelope.get("speech", ""))
-                self.recipe_ready.emit(data)
-        elif operation == AGENT_STEP_BY_STEP_OPERATION:
-            data = envelope.get("data")
-            if not isinstance(data, dict) or not self._is_valid_step_by_step(data):
-                self.thinking_ended.emit()
-                self.show_reply.emit(envelope.get("speech") or AGENT_INVALID_STEP_BY_STEP_SPEECH)
-            else:
-                self.show_reply.emit(envelope.get("speech", ""))
-                existing_path = self._existing_render_path(data.get("name", "Cocktail"))
-                if existing_path is not None and not self._wants_rerender(self.message):
-                    self.thinking_ended.emit()
-                    self.show_status.emit(AGENT_RENDER_STATUS_TEXT)
-                    perf.mark("render.cached")
-                    self.render_succeeded.emit(str(existing_path))
-                else:
-                    self._dump_step_by_step_debug(data)
-                    cocktail_name = data.get("name", "Cocktail")
-                    self.video_render_started.emit(cocktail_name)
-                    self.show_status.emit(AGENT_RENDER_STARTED_TEXT)
-                    self.generate_and_show_from_string(json.dumps(data))
-        else:
-            self.thinking_ended.emit()
-            self.show_reply.emit(envelope.get("speech", ""))
-
-        if current_session_id:
-            self.session_id_updated.emit(current_session_id)
-
-    def _is_valid_step_by_step(self, data: dict) -> bool:
+    async def _close_client(self) -> None:
+        client = self._client
+        self._client = None
+        if client is None:
+            return
         try:
-            validate(instance=data, schema=STEP_BY_STEP_SCHEMA)
-        except ValidationError:
-            return False
+            await client.disconnect()
+        except Exception as exc:
+            print(f"{LOG_PREFIX_ERROR}: agent client disconnect failed: {exc}")
+
+    def submit(self, message: str) -> None:
+        loop = self._loop
+        if loop is None or not self.is_ready():
+            self.show_reply.emit(AGENT_NOT_READY_SPEECH)
+            self.speak_sentence.emit(AGENT_NOT_READY_SPEECH)
+            self.speech_complete.emit()
+            return
+        asyncio.run_coroutine_threadsafe(self._run_turn(message), loop)
+
+    def reset_session(self) -> None:
+        loop = self._loop
+        if loop is None or not self.is_ready():
+            return
+        asyncio.run_coroutine_threadsafe(self._reset_session(), loop)
+
+    async def _reset_session(self) -> None:
+        async with self._turn_lock:
+            await self._close_client()
+            try:
+                await self._open_client()
+            except Exception as exc:
+                self.error_occurred.emit(str(exc))
+
+    async def _run_turn(self, message: str) -> None:
+        async with self._turn_lock:
+            self._interrupted.clear()
+            self._message = message
+            self._render_pending = False
+
+            perf.mark("agent.query_sent")
+            self.thinking_started.emit()
+
+            buffer = ""
+            reply = ""
+            saw_delta = False
+            spoke = False
+
+            try:
+                await self._client.query(message)
+                async for item in self._client.receive_response():
+                    if self._interrupted.is_set():
+                        break
+
+                    if isinstance(item, StreamEvent):
+                        event = item.event
+                        if event.get("type") != "content_block_delta":
+                            continue
+                        delta = event.get("delta") or {}
+                        if delta.get("type") != "text_delta":
+                            continue
+                        if not saw_delta:
+                            perf.mark("agent.first_text_delta")
+                            saw_delta = True
+                        buffer += delta.get("text", "")
+                        completed, buffer = split_completed_sentences(buffer)
+                        for sentence in completed:
+                            reply = f"{reply} {sentence}".strip()
+                            spoke = self._speak(sentence, spoke)
+
+                    elif isinstance(item, AssistantMessage) and not saw_delta:
+                        for block in item.content:
+                            if not isinstance(block, TextBlock):
+                                continue
+                            buffer += block.text
+                            completed, buffer = split_completed_sentences(buffer)
+                            for sentence in completed:
+                                reply = f"{reply} {sentence}".strip()
+                                spoke = self._speak(sentence, spoke)
+
+                    elif isinstance(item, ResultMessage):
+                        tail = buffer.strip()
+                        buffer = ""
+                        if tail:
+                            reply = f"{reply} {tail}".strip()
+                            spoke = self._speak(tail, spoke)
+
+            except Exception as exc:
+                if not self._interrupted.is_set():
+                    self.error_occurred.emit(str(exc))
+                    if not spoke:
+                        reply = AGENT_ERROR_SPEECH
+                        spoke = self._speak(AGENT_ERROR_SPEECH, spoke)
+
+            finally:
+                if reply:
+                    self.show_reply.emit(reply)
+                self.speech_complete.emit()
+                if not self._render_pending:
+                    self.thinking_ended.emit()
+
+    def _speak(self, sentence: str, already_spoke: bool) -> bool:
+        cleaned = clean_text_for_speech(sentence)
+        if not cleaned:
+            return already_spoke
+        if not already_spoke:
+            perf.mark("agent.first_sentence")
+        self.speak_sentence.emit(cleaned)
         return True
 
-    def _on_cli_process_started(self, proc: subprocess.Popen) -> None:
-        self._cli_process = proc
+    def on_recipe(self, data: dict) -> None:
+        self.recipe_ready.emit(dict(data))
+
+    def on_animation(self, data: dict) -> None:
+        cocktail_name = data.get("name", ANIM_DEFAULT_COCKTAIL_NAME)
+        existing = self._existing_render_path(cocktail_name)
+
+        if existing is not None and not self._wants_rerender(self._message):
+            perf.mark("render.cached")
+            self.show_status.emit(AGENT_RENDER_STATUS_TEXT)
+            self.render_succeeded.emit(str(existing))
+            return
+
+        self._render_pending = True
+        self._dump_step_by_step_debug(data)
+        self.video_render_started.emit(cocktail_name)
+        self.show_status.emit(AGENT_RENDER_STARTED_TEXT)
+        self._start_render(json.dumps(data))
+
+    async def on_scan(self) -> list:
+        done_event = threading.Event()
+        self._scan_result_path = None
+        self._scan_error = None
+        self._popup_requested.emit(done_event)
+
+        await asyncio.to_thread(done_event.wait)
+
+        path = self._scan_result_path
+        self._scan_result_path = None
+        if path is None:
+            raise RuntimeError(self._scan_error or AGENT_SCAN_NO_RESULT)
+
+        self._active_scan_path = path
+        try:
+            return await analyze_bottle_photo(path)
+        finally:
+            self._cleanup_scan_file()
 
     def interrupt(self) -> None:
         self._interrupted.set()
         self.stop_active_worker()
-        proc = self._cli_process
-        if proc is not None and proc.poll() is None:
-            try:
-                proc.kill()
-            except OSError:
-                pass
+        loop = self._loop
+        client = self._client
+        if loop is None or client is None:
+            return
+        asyncio.run_coroutine_threadsafe(self._interrupt_client(client), loop)
 
-    def _existing_render_path(self, cocktail_name: str) -> Path | None:
-        filename = sanitize_cocktail_filename(cocktail_name)
-        path = (Path(MANIM_OUTPUT_DIR) / f"{filename}{MANIM_VIDEO_EXTENSION}").resolve()
-        return path if path.is_file() else None
+    async def _interrupt_client(self, client: ClaudeSDKClient) -> None:
+        try:
+            await client.interrupt()
+        except Exception as exc:
+            print(f"{LOG_PREFIX_ERROR}: agent interrupt failed: {exc}")
 
-    def _wants_rerender(self, message: str) -> bool:
-        lowered = message.lower()
-        return any(keyword in lowered for keyword in STEP_BY_STEP_RERENDER_KEYWORDS)
+    def shutdown(self) -> None:
+        self._interrupted.set()
+        self.stop_active_worker()
+
+        if self._scan_popup is not None:
+            self._scan_popup.close()
+            self._scan_popup = None
+
+        loop = self._loop
+        event = self._shutdown_event
+        if loop is not None and event is not None:
+            loop.call_soon_threadsafe(event.set)
+
+        for worker in self._child_workers:
+            worker.wait(SHUTDOWN_THREAD_TIMEOUT_MS)
+        self.wait(SHUTDOWN_THREAD_TIMEOUT_MS)
 
     def _spawn_child(self, worker: CancellableWorker) -> None:
         self._child_workers.append(worker)
@@ -194,27 +306,6 @@ class Agent(QThread):
     def stop_active_worker(self) -> None:
         for worker in self._child_workers:
             worker.request_stop()
-
-    def shutdown(self) -> None:
-        self._interrupted.set()
-        self.stop_active_worker()
-        proc = self._cli_process
-        if proc is not None and proc.poll() is None:
-            try:
-                proc.kill()
-            except OSError:
-                pass
-        if self._scan_popup is not None:
-            self._scan_popup.close()
-        for worker in self._child_workers:
-            worker.wait()
-        self.wait()
-
-    def scan_image(self) -> None:
-        done_event = threading.Event()
-        self._scan_result_path = None
-        self._popup_requested.emit(done_event)
-        done_event.wait()
 
     def _create_scan_popup(self, done_event: threading.Event) -> None:
         from app.widgets.scan_receiver_popup import ScanReceiverPopup
@@ -228,6 +319,10 @@ class Agent(QThread):
             return
         self._scan_popup.show()
 
+    def _on_scan_failure(self, error_msg: str) -> None:
+        self._scan_error = error_msg
+        self.show_status.emit(f"Scanning failed: {error_msg}")
+
     def _cleanup_scan_file(self) -> None:
         path = self._active_scan_path
         self._active_scan_path = None
@@ -238,9 +333,18 @@ class Agent(QThread):
         except OSError as exc:
             print(f"{LOG_PREFIX_ERROR}: could not delete uploaded scan {path}: {exc}")
 
+    def _existing_render_path(self, cocktail_name: str) -> Path | None:
+        filename = sanitize_cocktail_filename(cocktail_name)
+        path = (Path(MANIM_OUTPUT_DIR) / f"{filename}{MANIM_VIDEO_EXTENSION}").resolve()
+        return path if path.is_file() else None
+
+    def _wants_rerender(self, message: str) -> bool:
+        lowered = message.lower()
+        return any(keyword in lowered for keyword in STEP_BY_STEP_RERENDER_KEYWORDS)
+
     def _dump_step_by_step_debug(self, data: dict) -> None:
         debug_dir = Path(STEP_BY_STEP_DEBUG_DIR)
-        filename = sanitize_cocktail_filename(data.get("name", "Cocktail"))
+        filename = sanitize_cocktail_filename(data.get("name", ANIM_DEFAULT_COCKTAIL_NAME))
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         path = debug_dir / f"{filename}_{timestamp}.json"
         try:
@@ -249,30 +353,20 @@ class Agent(QThread):
         except OSError as exc:
             print(f"{LOG_PREFIX_ERROR}: could not write step-by-step debug json {path}: {exc}")
 
-    def _on_scan_failure(self, error_msg: str):
-        output_messgae = f"Scanning failed: {error_msg}"
-        self.thinking_ended.emit()
-        self.show_reply.emit(output_messgae)
-
-    def generate_and_show_from_string(self, recipe_json_string: str):
+    def _start_render(self, recipe_json_string: str) -> None:
         self.manim_worker = ManimRenderWorker(recipe_json_string)
         self._spawn_child(self.manim_worker)
         self.manim_worker.rendering_finished.connect(self._on_render_success)
         self.manim_worker.rendering_failed.connect(self._on_render_failure)
-
         self.manim_worker.start()
 
-    def _on_render_success(self, output_mp4_path: str):
+    def _on_render_success(self, output_mp4_path: str) -> None:
+        self._render_pending = False
         self.thinking_ended.emit()
         self.show_status.emit(AGENT_RENDER_STATUS_TEXT)
         self.render_succeeded.emit(output_mp4_path)
 
-    def _on_render_failure(self, error_msg: str):
+    def _on_render_failure(self, error_msg: str) -> None:
+        self._render_pending = False
         self.thinking_ended.emit()
-        self.show_reply.emit(f"Rendering failed: {error_msg}")
-
-    def pause(self) -> None:
-        self._paused.set()
-
-    def resume(self) -> None:
-        self._paused.clear()
+        self.show_status.emit(f"{AGENT_RENDER_FAILED_PREFIX} {error_msg}")
