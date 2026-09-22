@@ -4,25 +4,18 @@ import mimetypes
 from pathlib import Path
 
 from claude_agent_sdk import (
-    AssistantMessage,
-    ClaudeAgentOptions,
-    ClaudeSDKClient,
-    ResultMessage,
-    TextBlock,
+    AssistantMessage, ClaudeAgentOptions, ClaudeSDKClient,
+    ResultMessage, TextBlock,
 )
 
 from app.config import (
-    AGENT_ENV,
-    AGENT_MODEL,
-    AGENT_PERMISSION_MODE,
-    AGENT_SCAN_DEFAULT_MEDIA_TYPE,
-    AGENT_SCAN_PROMPT_PATH,
+    AGENT_ENV, AGENT_MODEL, AGENT_PERMISSION_MODE,
+    AGENT_SCAN_DEFAULT_MEDIA_TYPE, AGENT_SCAN_PROMPT_PATH,
 )
-
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+from app.core.paths import PROJECT_ROOT
 
 SCAN_PROMPT: str = (
-    (_PROJECT_ROOT / AGENT_SCAN_PROMPT_PATH).read_text(encoding="utf-8").strip()
+    (PROJECT_ROOT / AGENT_SCAN_PROMPT_PATH).read_text(encoding="utf-8").strip()
 )
 
 
@@ -51,7 +44,7 @@ def _vision_options() -> ClaudeAgentOptions:
         setting_sources=[],
         permission_mode=AGENT_PERMISSION_MODE,
         env=dict(AGENT_ENV),
-        cwd=str(_PROJECT_ROOT),
+        cwd=str(PROJECT_ROOT),
     )
 
 

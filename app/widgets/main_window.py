@@ -4,42 +4,25 @@ from PyQt6.QtGui import QCloseEvent, QKeySequence, QShortcut, QShowEvent
 from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QSplitter, QWidget
 
 from app.config import (
-    APP_NAME,
-    CANVAS_POPUP_DEFAULT_HEIGHT,
-    CANVAS_POPUP_DEFAULT_WIDTH,
-    FULLSCREEN_SHORTCUT_ESC,
-    FULLSCREEN_SHORTCUT_F11,
-    LOG_PREFIX_VOICE,
-    MIC_BUTTON_LISTENING_TEXT,
-    MIC_BUTTON_MUTED_TEXT,
-    ORG_NAME,
-    RECIPE_POPUP_DEFAULT_HEIGHT,
-    RECIPE_POPUP_DEFAULT_WIDTH,
-    RECIPE_POPUP_POSITION_OFFSET,
-    SETTINGS_GEOMETRY_KEY,
-    SETTINGS_SPLITTER_STATE_KEY,
-    SPLITTER_DEFAULT_CANVAS_RATIO,
-    SPLITTER_DEFAULT_CHAT_RATIO,
-    SPLITTER_HANDLE_WIDTH,
-    SPLITTER_STRETCH_CANVAS,
-    SPLITTER_STRETCH_CHAT,
-    VIDEO_PREVIEW_DEFAULT_HEIGHT,
-    VIDEO_PREVIEW_DEFAULT_WIDTH,
-    VIDEO_PREVIEW_POSITION_OFFSET,
-    VOICE_MSG_NO_COMMAND_HEARD,
-    WINDOW_MIN_HEIGHT,
-    WINDOW_MIN_WIDTH,
-    WINDOW_TITLE,
+    APP_NAME, CANVAS_POPUP_DEFAULT_HEIGHT, CANVAS_POPUP_DEFAULT_WIDTH,
+    FULLSCREEN_SHORTCUT_ESC, FULLSCREEN_SHORTCUT_F11, LOG_PREFIX_VOICE,
+    MIC_BUTTON_LISTENING_TEXT, MIC_BUTTON_MUTED_TEXT, ORG_NAME,
+    RECIPE_POPUP_DEFAULT_HEIGHT, RECIPE_POPUP_DEFAULT_WIDTH, RECIPE_POPUP_POSITION_OFFSET,
+    SETTINGS_GEOMETRY_KEY, SETTINGS_SPLITTER_STATE_KEY, SPLITTER_DEFAULT_CANVAS_RATIO,
+    SPLITTER_DEFAULT_CHAT_RATIO, SPLITTER_HANDLE_WIDTH, SPLITTER_STRETCH_CANVAS,
+    SPLITTER_STRETCH_CHAT, VIDEO_PREVIEW_DEFAULT_HEIGHT, VIDEO_PREVIEW_DEFAULT_WIDTH,
+    VIDEO_PREVIEW_POSITION_OFFSET, VOICE_MSG_NO_COMMAND_HEARD, WINDOW_MIN_HEIGHT,
+    WINDOW_MIN_WIDTH, WINDOW_TITLE,
 )
-from app.theme import build_stylesheet
+from app.core import perf, qthread_support
 from app.threads import VoiceListener
+from app.widget_helpers.stylesheet import build_stylesheet
+from app.widget_helpers.win_dark_mode import enable_dark_titlebar
 from app.widgets.canvas_panel import CanvasPanel
 from app.widgets.chat_panel import ChatPanel
 from app.widgets.cocktail_canvas_popup import CocktailCanvasPopup
-from app.widgets.top_left_video_widget import TopLeftVideoWidget
-from app.widgets.top_right_recipes_widget import TopRightRecipyWidget
-from app.win_dark_mode import enable_dark_titlebar
-from app.helpers import perf, qthread_support
+from app.widgets.recipe_panel import TopRightRecipyWidget
+from app.widgets.video_panel import TopLeftVideoWidget
 
 
 class MainWindow(QMainWindow):

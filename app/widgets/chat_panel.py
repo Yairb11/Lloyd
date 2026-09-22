@@ -3,33 +3,20 @@ from PyQt6.QtWidgets import QHBoxLayout, QLineEdit, QPushButton, QScrollArea, QV
 from thefuzz import fuzz
 
 from app.config import (
-    ANIM_BACKEND,
-    ANIM_BACKEND_BOTH,
-    ANIM_BACKEND_CANVAS,
-    ANIM_BACKEND_MANIM,
-    AGENT_RENDER_FAILED_PREFIX,
-    AGENT_RENDER_STARTED_TEXT,
-    AGENT_RENDER_STATUS_TEXT,
-    CHAT_CLEAR_COMMAND_TEXT,
-    CHAT_CLEAR_VOICE_MATCH_THRESHOLD,
-    CHAT_CLEAR_VOICE_PHRASE,
-    CHAT_HISTORY_SPACING,
-    CHAT_INPUT_PLACEHOLDER,
-    CHAT_INPUT_ROW_SPACING,
-    CHAT_PANEL_MARGIN,
-    CHAT_PANEL_MIN_WIDTH,
-    CHAT_PANEL_SPACING,
-    CHAT_SEND_BUTTON_TEXT,
-    CHAT_STOP_BUTTON_TEXT,
-    LOG_PREFIX_AGENT,
-    OBJECT_NAME_CHAT_HISTORY,
-    OBJECT_NAME_CHAT_PANEL,
+    AGENT_RENDER_FAILED_PREFIX, AGENT_RENDER_STARTED_TEXT, AGENT_RENDER_STATUS_TEXT,
+    ANIM_BACKEND, ANIM_BACKEND_BOTH, ANIM_BACKEND_CANVAS,
+    ANIM_BACKEND_MANIM, CHAT_CLEAR_COMMAND_TEXT, CHAT_CLEAR_VOICE_MATCH_THRESHOLD,
+    CHAT_CLEAR_VOICE_PHRASE, CHAT_HISTORY_SPACING, CHAT_INPUT_PLACEHOLDER,
+    CHAT_INPUT_ROW_SPACING, CHAT_PANEL_MARGIN, CHAT_PANEL_MIN_WIDTH,
+    CHAT_PANEL_SPACING, CHAT_SEND_BUTTON_TEXT, CHAT_STOP_BUTTON_TEXT,
+    LOG_PREFIX_AGENT, OBJECT_NAME_CHAT_HISTORY, OBJECT_NAME_CHAT_PANEL,
     OBJECT_NAME_SEND_BUTTON,
 )
-from app.threads import Agent, LloydSpeaker, RenderController
+from app.core import perf
+from app.render import RenderController
+from app.threads import Agent, LloydSpeaker
 from app.widgets.chat_bubble import ChatBubble
 from app.widgets.typing_indicator import TypingIndicator
-from app.helpers import perf
 
 
 class ChatPanel(QWidget):
@@ -48,7 +35,6 @@ class ChatPanel(QWidget):
         on_video_render_started=None,
         parent: QWidget | None = None
     ) -> None:
-
         super().__init__(parent)
         self.setObjectName(OBJECT_NAME_CHAT_PANEL)
         self.setMinimumWidth(CHAT_PANEL_MIN_WIDTH)

@@ -2,102 +2,48 @@ import functools
 import math
 
 from PyQt6.QtCore import (
-    QEasingCurve,
-    QParallelAnimationGroup,
-    QPauseAnimation,
-    QPropertyAnimation,
-    QRectF,
-    QSequentialAnimationGroup,
-    QVariantAnimation,
-    Qt,
-    pyqtSignal,
+    QEasingCurve, QParallelAnimationGroup, QPauseAnimation,
+    QPropertyAnimation, QRectF, QSequentialAnimationGroup,
+    QVariantAnimation, Qt, pyqtSignal,
 )
 from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView
 
-from app.config import (
-    ANIM_CANVAS_FADE_MS,
-    ANIM_CANVAS_HOLD_MS,
-    ANIM_CANVAS_LOOP_COUNT,
-    ANIM_CANVAS_SCENE_HEIGHT,
-    ANIM_CANVAS_SCENE_WIDTH,
-    ANIM_CANVAS_STEP_PAUSE_MS,
-    ANIM_CANVAS_TITLE_PT,
-    ANIM_CANVAS_STEP_TITLE_PT,
-    ANIM_CANVAS_STEP_DESC_PT,
-    ANIM_COLOR_DEFAULT_GARNISH,
-    ANIM_COLOR_DEFAULT_LIQUID,
-    ANIM_COLOR_DEFAULT_MUDDLE_BLEND,
-    ANIM_COLOR_DEFAULT_SHAKE_BLEND,
-    ANIM_COLOR_DEFAULT_STIR_BLEND,
-    ANIM_COLOR_DEFAULT_STRAIN,
-    ANIM_COLOR_FOAM,
-    ANIM_GARNISH_SIDE_OFFSET,
-    ANIM_GARNISH_SURFACE_Y_OFFSET,
-    ANIM_ICE_CUBE_COUNT_PREP,
-    ANIM_ICE_CUBE_COUNT_SERVING,
-    ANIM_ICE_CUBE_HEIGHT_DELTA,
-    ANIM_ICE_CUBE_X_SPACING,
-    ANIM_ICE_CUBE_Y_OFFSET,
-    ANIM_ICE_LARGE_HEIGHT_DELTA,
-    ANIM_ICE_LARGE_Y_OFFSET,
-    ANIM_LABEL_MIXING_GLASS,
-    ANIM_LABEL_SERVING_GLASS,
-    ANIM_LABEL_SHAKER,
-    ANIM_LAYER_DEFAULT_OPACITY,
-    ANIM_MEASURE_DASH_HEIGHT_SCALE,
-    ANIM_MEASURE_DEFAULT_AMOUNT_ML,
-    ANIM_MEASURE_FALLBACK_THICKNESS,
-    ANIM_MEASURE_MAX_FILL_MARGIN,
-    ANIM_MEASURE_MIN_AVAILABLE_HEIGHT,
-    ANIM_MEASURE_STREAM_START_OFFSET,
-    ANIM_MEASURE_STREAM_STROKE_WIDTH_LIQUID,
-    ANIM_MEASURE_STREAM_STROKE_WIDTH_OTHER,
-    ANIM_MEASURE_TOP_MARGIN,
-    ANIM_MEASURE_TOP_MIN_THICKNESS,
-    ANIM_ML_TO_HEIGHT_SCALE,
-    ANIM_MUDDLER_STROKES,
-    ANIM_SHAKE_WIGGLE_COUNT,
-    ANIM_SHAKE_WIGGLE_ROTATION,
-    ANIM_SOLID_HEIGHT_DELTA,
-    ANIM_SOLID_Y_OFFSET,
-    ANIM_STEP_WRAP_WORDS_PER_LINE,
-    ANIM_STIR_ORBIT_RADIUS_RATIO,
-    ANIM_STIR_ORBIT_RY,
-    ANIM_STIR_ORBIT_Y_OFFSET,
-    ANIM_STRAIN_FOAM_THICKNESS,
-    ANIM_STRAIN_RIM_MARGIN,
-    ANIM_STRAIN_TILT_ANGLE,
-    ANIM_VESSEL_LABEL_OPACITY,
-    ANIM_VESSEL_PAIR_X_OFFSET,
-    ANIM_VESSEL_Y_OFFSET,
-    COLOR_CANVAS_BG,
-)
-from app.helpers import perf
-from app.helpers.canvas_geometry import qp, vessel_shape
-from app.helpers.canvas_items import (
-    GroupItem,
-    make_garnish,
-    make_ice_cube,
-    make_ice_rock,
-    make_ice_sphere,
-    make_label,
-    make_layer,
-    make_muddler,
-    make_pour_curve,
-    make_solid,
-    make_spoon,
-    make_stream,
-    make_text,
-    make_vessel,
-)
-from app.helpers.cocktail_recipe import (
-    Recipe,
-    is_top_step,
-    needs_shaker,
+from app.animation.recipe import (
+    Recipe, is_top_step, needs_shaker,
     wrap_instruction,
 )
-from app.helpers.color_utils import hex_to_rgb, rgb_to_hex
+from app.config import (
+    ANIM_CANVAS_FADE_MS, ANIM_CANVAS_HOLD_MS, ANIM_CANVAS_LOOP_COUNT,
+    ANIM_CANVAS_SCENE_HEIGHT, ANIM_CANVAS_SCENE_WIDTH, ANIM_CANVAS_STEP_DESC_PT,
+    ANIM_CANVAS_STEP_PAUSE_MS, ANIM_CANVAS_STEP_TITLE_PT, ANIM_CANVAS_TITLE_PT,
+    ANIM_COLOR_DEFAULT_GARNISH, ANIM_COLOR_DEFAULT_LIQUID, ANIM_COLOR_DEFAULT_MUDDLE_BLEND,
+    ANIM_COLOR_DEFAULT_SHAKE_BLEND, ANIM_COLOR_DEFAULT_STIR_BLEND, ANIM_COLOR_DEFAULT_STRAIN,
+    ANIM_COLOR_FOAM, ANIM_GARNISH_SIDE_OFFSET, ANIM_GARNISH_SURFACE_Y_OFFSET,
+    ANIM_ICE_CUBE_COUNT_PREP, ANIM_ICE_CUBE_COUNT_SERVING, ANIM_ICE_CUBE_HEIGHT_DELTA,
+    ANIM_ICE_CUBE_X_SPACING, ANIM_ICE_CUBE_Y_OFFSET, ANIM_ICE_LARGE_HEIGHT_DELTA,
+    ANIM_ICE_LARGE_Y_OFFSET, ANIM_LABEL_MIXING_GLASS, ANIM_LABEL_SERVING_GLASS,
+    ANIM_LABEL_SHAKER, ANIM_LAYER_DEFAULT_OPACITY, ANIM_MEASURE_DASH_HEIGHT_SCALE,
+    ANIM_MEASURE_DEFAULT_AMOUNT_ML, ANIM_MEASURE_FALLBACK_THICKNESS, ANIM_MEASURE_MAX_FILL_MARGIN,
+    ANIM_MEASURE_MIN_AVAILABLE_HEIGHT, ANIM_MEASURE_STREAM_START_OFFSET, ANIM_MEASURE_STREAM_STROKE_WIDTH_LIQUID,
+    ANIM_MEASURE_STREAM_STROKE_WIDTH_OTHER, ANIM_MEASURE_TOP_MARGIN, ANIM_MEASURE_TOP_MIN_THICKNESS,
+    ANIM_ML_TO_HEIGHT_SCALE, ANIM_MUDDLER_STROKES, ANIM_SHAKE_WIGGLE_COUNT,
+    ANIM_SHAKE_WIGGLE_ROTATION, ANIM_SOLID_HEIGHT_DELTA, ANIM_SOLID_Y_OFFSET,
+    ANIM_STEP_WRAP_WORDS_PER_LINE, ANIM_STIR_ORBIT_RADIUS_RATIO, ANIM_STIR_ORBIT_RY,
+    ANIM_STIR_ORBIT_Y_OFFSET, ANIM_STRAIN_FOAM_THICKNESS, ANIM_STRAIN_RIM_MARGIN,
+    ANIM_STRAIN_TILT_ANGLE, ANIM_VESSEL_LABEL_OPACITY, ANIM_VESSEL_PAIR_X_OFFSET,
+    ANIM_VESSEL_Y_OFFSET, COLOR_CANVAS_BG,
+)
+from app.core import perf
+from app.core.color import hex_to_rgb, rgb_to_hex
+from app.widget_helpers.canvas_geometry import qp, vessel_shape
+from app.widget_helpers.canvas_items import (
+    GroupItem, make_garnish, make_ice_cube,
+    make_ice_rock, make_ice_sphere, make_label,
+    make_layer, make_muddler, make_pour_curve,
+    make_solid, make_spoon, make_stream,
+    make_text, make_vessel,
+)
 
 SERVING_GLASS = "serving_glass"
 PREP_VESSEL = "prep"
@@ -135,9 +81,6 @@ def blend(colors: list, default_hex: str) -> str:
 
 class CocktailCanvas(QGraphicsView):
     animation_started = pyqtSignal(str)
-    animation_finished = pyqtSignal()
-    loop_completed = pyqtSignal(int)
-    step_changed = pyqtSignal(int, str)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -181,14 +124,6 @@ class CocktailCanvas(QGraphicsView):
         self._active_target = None
         self._already_strained = False
 
-    def pause(self) -> None:
-        if self._sequence is not None:
-            self._sequence.pause()
-
-    def resume(self) -> None:
-        if self._sequence is not None:
-            self._sequence.resume()
-
     def play_spec(self, spec: dict) -> None:
         self.stop()
         perf.mark("canvas.build_start")
@@ -199,15 +134,14 @@ class CocktailCanvas(QGraphicsView):
         self._add_title(sequence)
         self._setup_vessels()
 
-        for index, step in enumerate(self._recipe.steps):
-            step_group = self._build_step(index, step)
+        for step in self._recipe.steps:
+            step_group = self._build_step(step)
             if step_group is not None:
                 sequence.addAnimation(step_group)
             sequence.addAnimation(QPauseAnimation(ANIM_CANVAS_STEP_PAUSE_MS))
 
         sequence.addAnimation(QPauseAnimation(ANIM_CANVAS_HOLD_MS))
         sequence.setLoopCount(ANIM_CANVAS_LOOP_COUNT)
-        sequence.finished.connect(self.animation_finished.emit)
         sequence.currentLoopChanged.connect(self._on_loop_changed)
 
         self._sequence = sequence
@@ -218,7 +152,6 @@ class CocktailCanvas(QGraphicsView):
     def _on_loop_changed(self, loop: int) -> None:
         for item in self._fading_items:
             item.setOpacity(0.0)
-        self.loop_completed.emit(loop)
 
     def _track(self, item):
         self._scene.addItem(item)
@@ -283,7 +216,7 @@ class CocktailCanvas(QGraphicsView):
 
     def _add_vessel(self, key: str, c_type: str, label: str, x: float, y: float) -> None:
         shape = vessel_shape(c_type)
-        item = make_vessel(shape, label)
+        item = make_vessel(shape)
         item.setPos(qp(x, y))
         item.setOpacity(0.0)
         self._track(item)
@@ -312,7 +245,7 @@ class CocktailCanvas(QGraphicsView):
             return self._vessels.get(PREP_VESSEL, self._vessels[SERVING_GLASS])
         return self._vessels.get(self._active_target, self._vessels[SERVING_GLASS])
 
-    def _build_step(self, index: int, step: dict):
+    def _build_step(self, step: dict):
         title = step.get("title", "")
         instruction = step.get("instruction", "")
         action = step.get("action", {})
@@ -322,7 +255,7 @@ class CocktailCanvas(QGraphicsView):
         top_step = is_top_step(title, instruction, action)
 
         group = QSequentialAnimationGroup(self)
-        group.addAnimation(self._build_step_text(index, title, instruction))
+        group.addAnimation(self._build_step_text(title, instruction))
 
         state = self._select_state(action, top_step)
         reveal = QParallelAnimationGroup(self)
@@ -348,7 +281,7 @@ class CocktailCanvas(QGraphicsView):
 
         return group
 
-    def _build_step_text(self, index: int, title: str, instruction: str):
+    def _build_step_text(self, title: str, instruction: str):
         group = QParallelAnimationGroup(self)
 
         for old in self._step_items:
@@ -370,12 +303,10 @@ class CocktailCanvas(QGraphicsView):
         self._step_items = [title_item, desc_item]
         group.addAnimation(self._fade_in(title_item))
         group.addAnimation(self._fade_in(desc_item))
-
-        group.finished.connect(functools.partial(self.step_changed.emit, index, title))
         return group
 
     def _build_chill(self, state, action, top_step):
-        frost = make_vessel(state.shape, "")
+        frost = make_vessel(state.shape)
         frost.setPos(qp(state.origin_x, state.origin_y))
         frost.setOpacity(0.0)
         self._track(frost)

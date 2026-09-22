@@ -3,30 +3,14 @@ from PyQt6.QtGui import QCursor
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 from app.config import (
-    COLOR_CLOSE_BUTTON_BG,
-    COLOR_CLOSE_BUTTON_HOVER_BG,
-    COLOR_CLOSE_BUTTON_TEXT,
-    COLOR_PANEL_ACTION_BG,
-    COLOR_PANEL_ACTION_DISABLED_TEXT,
-    COLOR_PANEL_ACTION_HOVER_BG,
-    COLOR_PANEL_ACTION_TEXT,
-    COLOR_VIDEO_BG,
-    COLOR_VIDEO_BORDER,
-    COLOR_VIDEO_TITLE,
-    FONT_SIZE_CLOSE_BUTTON,
-    FONT_SIZE_VIDEO_TITLE,
-    PANEL_ACTION_BUTTON_HEIGHT,
-    PANEL_ACTION_BUTTON_PADDING_H,
-    PANEL_ACTION_BUTTON_RADIUS,
-    PANEL_BODY_MARGIN,
-    PANEL_BORDER_MARGIN,
-    PANEL_BORDER_RADIUS,
-    PANEL_BORDER_WIDTH,
-    PANEL_CLOSE_BUTTON_RADIUS,
-    PANEL_CLOSE_BUTTON_SIZE,
-    PANEL_CLOSE_GLYPH,
-    PANEL_HEADER_HEIGHT,
-    PANEL_HEADER_SPACING,
+    COLOR_CLOSE_BUTTON_BG, COLOR_CLOSE_BUTTON_HOVER_BG, COLOR_CLOSE_BUTTON_TEXT,
+    COLOR_PANEL_ACTION_BG, COLOR_PANEL_ACTION_DISABLED_TEXT, COLOR_PANEL_ACTION_HOVER_BG,
+    COLOR_PANEL_ACTION_TEXT, COLOR_VIDEO_BG, COLOR_VIDEO_BORDER,
+    COLOR_VIDEO_TITLE, FONT_SIZE_CLOSE_BUTTON, FONT_SIZE_VIDEO_TITLE,
+    PANEL_ACTION_BUTTON_HEIGHT, PANEL_ACTION_BUTTON_PADDING_H, PANEL_ACTION_BUTTON_RADIUS,
+    PANEL_BODY_MARGIN, PANEL_BORDER_MARGIN, PANEL_BORDER_RADIUS,
+    PANEL_BORDER_WIDTH, PANEL_CLOSE_BUTTON_RADIUS, PANEL_CLOSE_BUTTON_SIZE,
+    PANEL_CLOSE_GLYPH, PANEL_HEADER_HEIGHT, PANEL_HEADER_SPACING,
     PANEL_TITLE_MAX_LENGTH,
 )
 
@@ -101,8 +85,7 @@ class FloatingPanel(QFrame):
         self.title_label = QLabel(title, self.header_frame)
         self.title_label.installEventFilter(self._header_filter)
         self.title_label.setStyleSheet(
-            f"color: {title_color}; font-weight: bold; "
-            f"font-size: {FONT_SIZE_VIDEO_TITLE}px; border: none;"
+            f"color: {title_color}; font-weight: bold; font-size: {FONT_SIZE_VIDEO_TITLE}px; border: none;"
         )
         header_layout.addWidget(self.title_label)
         header_layout.addStretch()

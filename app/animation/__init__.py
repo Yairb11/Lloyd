@@ -1,0 +1,3 @@
+from app.animation.recipe import Recipe
+
+__all__ = ["Recipe"]

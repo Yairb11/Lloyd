@@ -1,0 +1,25 @@
+ORG_NAME: str = "Lloyd"
+APP_NAME: str = "Lloyd"
+
+WINDOW_TITLE: str = "Lloyd"
+WINDOW_MIN_WIDTH: int = 1024
+WINDOW_MIN_HEIGHT: int = 640
+
+SPLITTER_HANDLE_WIDTH: int = 4
+SPLITTER_STRETCH_CANVAS: int = 3
+SPLITTER_STRETCH_CHAT: int = 1
+SPLITTER_DEFAULT_CANVAS_RATIO: float = 0.75
+SPLITTER_DEFAULT_CHAT_RATIO: float = 0.25
+
+FULLSCREEN_SHORTCUT_F11: str = "F11"
+FULLSCREEN_SHORTCUT_ESC: str = "Esc"
+
+SETTINGS_GEOMETRY_KEY: str = "window/geometry"
+SETTINGS_SPLITTER_STATE_KEY: str = "window/splitter_state"
+
+WIN_DWM_IMMERSIVE_DARK_MODE_ATTRIBUTE: int = 20
+
+LOG_PREFIX_VOICE: str = "[Lloyd voice]"
+LOG_PREFIX_AGENT: str = "[Lloyd agent]"
+LOG_PREFIX_ERROR: str = "[Lloyd Error]"
+LOG_PREFIX_RENDER: str = "[Lloyd render]"

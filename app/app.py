@@ -5,8 +5,8 @@ import traceback
 from PyQt6.QtWidgets import QApplication
 
 from app.config import APP_NAME, ORG_NAME
-from app.widgets import MainWindow
-from app.helpers import qthread_support
+from app.core import qthread_support
+from app.widgets.main_window import MainWindow
 
 _window: MainWindow | None = None
 
