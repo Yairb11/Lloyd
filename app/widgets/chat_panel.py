@@ -23,6 +23,7 @@ from app.helpers.text import clean_text_for_speech
 from app.threads import Agent, LloydSpeaker
 from app.widgets.chat_bubble import ChatBubble
 from app.widgets.typing_indicator import TypingIndicator
+from app.helpers import perf
 
 
 class ChatPanel(QWidget):
@@ -124,6 +125,9 @@ class ChatPanel(QWidget):
             self._clear_chat()
             return
 
+        if not via_voice:
+            perf.start("text")
+
         self._append_bubble(message, is_user=True)
         self.agent = Agent(message, session_id=self._session_id)
         self.agent.error_occurred.connect(self._on_agent_error)
@@ -137,6 +141,7 @@ class ChatPanel(QWidget):
         self.agent.session_id_updated.connect(self._on_session_id_updated)
 
         self._set_busy(True)
+        perf.mark("agent.submitted")
         self.agent.start()
 
     def _is_clear_chat_command(self, message: str, *, via_voice: bool) -> bool:
@@ -154,7 +159,7 @@ class ChatPanel(QWidget):
         self._session_id = None
 
     def start_voice_transcription(self) -> None:
-        if self._busy:
+        if self._busy or self._voice_transcribing:
             return
         self._voice_transcribing = True
         self._set_busy(True)
@@ -288,6 +293,7 @@ class ChatPanel(QWidget):
 
         speech_text = clean_text_for_speech(str(reply))
         if speech_text:
+            perf.mark("tts.requested")
             self.lloyd_speaker.speak(speech_text)
 
     def _on_show_status(self, text: str) -> None:

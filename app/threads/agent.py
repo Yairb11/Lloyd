@@ -27,6 +27,7 @@ from app.config import (
 from app.helpers.text import sanitize_cocktail_filename
 from app.threads.cancellable_worker import CancellableWorker
 from app.threads.manim_render_worker import ManimRenderWorker
+from app.helpers import perf
 
 class Agent(QThread):
     thinking_started = pyqtSignal()
@@ -59,6 +60,7 @@ class Agent(QThread):
     def run(self) -> None:
         self.thinking_started.emit()
 
+        perf.mark("agent.query_sent")
         try:
             envelope = ask_bartender(
                 self.message, self.session_id, on_process_started=self._on_cli_process_started
@@ -70,6 +72,7 @@ class Agent(QThread):
             self.show_reply.emit(AGENT_ERROR_SPEECH)
             self.thinking_ended.emit()
             return
+        perf.mark("agent.reply_ready")
 
         if self._interrupted.is_set():
             return
@@ -83,6 +86,7 @@ class Agent(QThread):
                 return
 
             self._active_scan_path = self._scan_result_path
+            perf.mark("agent.scan_query_sent")
             try:
                 envelope = ask_bartender(
                     self._scan_result_path,
@@ -98,6 +102,7 @@ class Agent(QThread):
                 return
             finally:
                 self._cleanup_scan_file()
+            perf.mark("agent.scan_reply_ready")
 
             if self._interrupted.is_set():
                 return
@@ -134,6 +139,7 @@ class Agent(QThread):
                 if existing_path is not None and not self._wants_rerender(self.message):
                     self.thinking_ended.emit()
                     self.show_status.emit(AGENT_RENDER_STATUS_TEXT)
+                    perf.mark("render.cached")
                     self.render_succeeded.emit(str(existing_path))
                 else:
                     self._dump_step_by_step_debug(data)

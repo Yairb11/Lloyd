@@ -9,6 +9,7 @@ from app.config import MANIM_OUTPUT_DIR, MANIM_QUALITY, MANIM_TEMP_DIR_PREFIX, M
 from app.helpers.cocktail_animation_scene import CocktailAnimationScene
 from app.helpers.text import sanitize_cocktail_filename
 from app.threads.cancellable_worker import CancellableWorker
+from app.helpers import perf
 
 class ManimRenderWorker(CancellableWorker):
     rendering_finished = pyqtSignal(str)
@@ -47,6 +48,7 @@ class ManimRenderWorker(CancellableWorker):
 
         try:
             scene = CocktailAnimationScene(parsed_data)
+            perf.mark("render.start")
             scene.render()
 
             if self.is_cancelled():
@@ -64,6 +66,7 @@ class ManimRenderWorker(CancellableWorker):
             finally:
                 tmp_final.unlink(missing_ok=True)
 
+            perf.mark("render.done")
             self.rendering_finished.emit(str(final_mp4))
 
         except Exception as exc:

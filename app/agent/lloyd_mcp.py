@@ -8,6 +8,7 @@ import textwrap
 from pathlib import Path
 
 from app.config import MCP_HOST, MCP_PORT, MCP_SERVER_NAME, MCP_TRANSPORT
+from app.helpers import perf
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 _PROMPTS_DIR = _PROJECT_ROOT / "prompts"
@@ -147,35 +148,50 @@ def run_mcp_server():
         the shelf, photo's at /home/me/bar.jpg'). Never invent or guess a
         path; if the message doesn't contain one, don't call this tool --
         explain in your reply that you need an image path instead."""
+        perf.start("mcp.scan")
         try:
             beverages = analyze_image_base64(image_path)
         except Exception as e:
             return {"beverages": [], "error": f"{type(e).__name__}: {e}"}
+        finally:
+            perf.mark("mcp.tool_done")
         return {"beverages": beverages}
 
     @mcp.tool(description=RECIPE_PROMPT)
     def recipe(drink_name: str) -> dict:
-        return {"drink": drink_name, "results": web_search(f"{drink_name} cocktail recipe")}
+        perf.start("mcp.recipe")
+        results = web_search(f"{drink_name} cocktail recipe")
+        perf.mark("mcp.tool_done")
+        return {"drink": drink_name, "results": results}
 
     @mcp.tool(description=STEP_BY_STEP_PROMPT)
     def step_by_step(drink_name: str) -> dict:
-        return {
-            "drink": drink_name,
-            "results": web_search(f"{drink_name} cocktail exact measurements method steps"),
-        }
+        perf.start("mcp.step_by_step")
+        results = web_search(f"{drink_name} cocktail exact measurements method steps")
+        perf.mark("mcp.tool_done")
+        return {"drink": drink_name, "results": results}
 
     @mcp.tool(description=SUGGESTIONS_PROMPT)
     def suggestions(available_drinks: list) -> dict:
+        perf.start("mcp.suggestions")
         q = " ".join(available_drinks)
-        return {"available": available_drinks, "results": web_search(f"cocktails to make with {q}")}
+        results = web_search(f"cocktails to make with {q}")
+        perf.mark("mcp.tool_done")
+        return {"available": available_drinks, "results": results}
 
     @mcp.tool(description=BASIC_QUESTION_PROMPT)
     def basic_question(question: str) -> dict:
-        return {"question": question, "results": web_search(question)}
+        perf.start("mcp.basic_question")
+        results = web_search(question)
+        perf.mark("mcp.tool_done")
+        return {"question": question, "results": results}
 
     @mcp.tool(description=STORY_PROMPT)
     def story(drink_name: str) -> dict:
-        return {"drink": drink_name, "results": web_search(f"{drink_name} cocktail history origin story")}
+        perf.start("mcp.story")
+        results = web_search(f"{drink_name} cocktail history origin story")
+        perf.mark("mcp.tool_done")
+        return {"drink": drink_name, "results": results}
 
     mcp.run(transport=MCP_TRANSPORT)
 

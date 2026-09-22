@@ -37,6 +37,7 @@ from app.widgets.chat_panel import ChatPanel
 from app.widgets.top_left_video_widget import TopLeftVideoWidget
 from app.widgets.top_right_recipes_widget import TopRightRecipyWidget
 from app.win_dark_mode import enable_dark_titlebar
+from app.helpers import perf
 
 
 class MainWindow(QMainWindow):
@@ -151,6 +152,7 @@ class MainWindow(QMainWindow):
     def _setup_voice_listener(self) -> None:
         self.voice_listener = VoiceListener(self)
         self.voice_listener.listener_ready.connect(self._on_listener_ready)
+        self.voice_listener.wake_detected.connect(self._on_wake_detected)
         self.voice_listener.wake_word_detected.connect(self._on_wake_word_detected)
         self.voice_listener.stop_word_detected.connect(self._on_stop_word_detected)
         self.voice_listener.error_occurred.connect(self._on_voice_error)
@@ -172,6 +174,11 @@ class MainWindow(QMainWindow):
         button.setEnabled(True)
         button.setText(MIC_BUTTON_MUTED_TEXT if button.isChecked() else MIC_BUTTON_LISTENING_TEXT)
         self._refresh_busy_visuals()
+
+    def _on_wake_detected(self) -> None:
+        self.canvas_panel.sphere.enter_listening()
+        self.chat_panel.start_voice_transcription()
+        perf.mark("wake.ui_shown")
 
     def _on_wake_word_detected(self, text: str) -> None:
         self.chat_panel.finish_voice_transcription(text)

@@ -17,6 +17,7 @@ from app.config import (
 )
 from app.helpers.audio_playback import AmplitudePlayer, decode_audio_to_pcm, silence_pcm
 from app.helpers.text import split_into_sentences
+from app.helpers import perf
 
 
 class LloydSpeaker(QThread):
@@ -69,6 +70,7 @@ class LloydSpeaker(QThread):
                 pcm, pcm_sample_rate = item
                 if sample_rate is None:
                     sample_rate = pcm_sample_rate
+                    perf.mark("tts.first_audio")
                     self._player.start(sample_rate)
                     self.speech_started.emit()
 
