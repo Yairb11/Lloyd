@@ -10,10 +10,10 @@ from app.config import (
     CHAT_INPUT_ROW_SPACING, CHAT_PANEL_MARGIN, CHAT_PANEL_MIN_WIDTH,
     CHAT_PANEL_SPACING, CHAT_SEND_BUTTON_TEXT, CHAT_STOP_BUTTON_TEXT,
     LOG_PREFIX_AGENT, OBJECT_NAME_CHAT_HISTORY, OBJECT_NAME_CHAT_PANEL,
-    OBJECT_NAME_SEND_BUTTON,
+    OBJECT_NAME_SEND_BUTTON, OFFLINE_HINT_TEXT, OFFLINE_SHOW_HINT,
 )
 from app.core import perf
-from app.core.text import normalize_voice_command
+from app.core.text import clean_text_for_speech, normalize_voice_command
 from app.render import RenderController
 from app.threads import Agent, LloydSpeaker
 from app.widgets.chat_bubble import ChatBubble
@@ -56,6 +56,8 @@ class ChatPanel(QWidget):
         self._speaking = False
         self._voice_transcribing = False
         self._speech_muted = False
+        self._engine_ready = False
+        self._pending_offline_line: str | None = None
         self._typing_indicator: TypingIndicator | None = None
         self._voice_transcribing_indicator: TypingIndicator | None = None
 
@@ -74,6 +76,7 @@ class ChatPanel(QWidget):
 
         self.agent = Agent(self)
         self.agent.error_occurred.connect(self._on_agent_error)
+        self.agent.offline_detected.connect(self._on_offline_detected)
         self.agent.speak_sentence.connect(self._on_speak_sentence)
         self.agent.speech_complete.connect(self._on_speech_complete)
         self.agent.show_reply.connect(self._on_show_reply)
@@ -231,6 +234,27 @@ class ChatPanel(QWidget):
 
     def _on_engine_ready(self, name: str) -> None:
         print(f"{LOG_PREFIX_AGENT} tts engine: {name}")
+        self._engine_ready = True
+        self._flush_offline_line()
+
+    def _on_offline_detected(self, line: str) -> None:
+        self._pending_offline_line = line
+        self._flush_offline_line()
+
+    def _flush_offline_line(self) -> None:
+        line = self._pending_offline_line
+        if line is None or not self._engine_ready:
+            return
+
+        self._pending_offline_line = None
+        self._append_bubble(line + OFFLINE_HINT_TEXT if OFFLINE_SHOW_HINT else line, is_user=False)
+
+        if not self._speech_muted:
+            spoken = clean_text_for_speech(line)
+            if spoken:
+                self.lloyd_speaker.speak(spoken)
+
+        self._set_busy(False)
 
     def _on_speech_started(self) -> None:
         self._speaking = True

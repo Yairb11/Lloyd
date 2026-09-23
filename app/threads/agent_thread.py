@@ -13,6 +13,8 @@ from app.config import (
     LOG_PREFIX_ERROR, SHUTDOWN_THREAD_TIMEOUT_MS, SPEECH_SENTENCE_SPLIT_PATTERN,
 )
 from app.core import perf
+from app.core.connectivity import is_online
+from app.core.offline_lines import pick_offline_line
 from app.core.qthread_support import track
 from app.core.text import clean_text_for_speech
 from app.threads.cancellable_worker import CancellableWorker
@@ -38,6 +40,7 @@ class Agent(QThread):
     show_reply = pyqtSignal(str)
     show_status = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
+    offline_detected = pyqtSignal(str)
     recipe_ready = pyqtSignal(dict)
     animation_ready = pyqtSignal(dict)
 
@@ -54,6 +57,7 @@ class Agent(QThread):
         self._turn_lock: asyncio.Lock | None = None
         self._ready = threading.Event()
         self._interrupted = threading.Event()
+        self._offline = False
 
         self._child_workers: list[CancellableWorker] = []
 
@@ -66,6 +70,9 @@ class Agent(QThread):
 
     def is_ready(self) -> bool:
         return self._ready.is_set() and self._client is not None
+
+    def is_offline(self) -> bool:
+        return self._offline
 
     def run(self) -> None:
         self._loop = asyncio.new_event_loop()
@@ -81,19 +88,29 @@ class Agent(QThread):
         self._turn_lock = asyncio.Lock()
         self._options = client.build_options(self)
 
-        try:
-            await self._open_client()
-        except Exception as exc:
-            self._ready.set()
-            self.error_occurred.emit(str(exc))
-            return
-
-        perf.mark("agent.client_ready")
+        await self._connect_or_deflect(announce_offline=True)
         self._ready.set()
-        self.agent_ready.emit()
 
         await self._shutdown_event.wait()
         await self._close_client()
+
+    async def _connect_or_deflect(self, announce_offline: bool) -> bool:
+        if not await asyncio.to_thread(is_online):
+            self._offline = True
+            if announce_offline:
+                self.offline_detected.emit(pick_offline_line())
+            return False
+
+        try:
+            await self._open_client()
+        except Exception as exc:
+            self.error_occurred.emit(str(exc))
+            return False
+
+        self._offline = False
+        perf.mark("agent.client_ready")
+        self.agent_ready.emit()
+        return True
 
     async def _open_client(self) -> None:
         client = ClaudeSDKClient(options=self._options)
@@ -112,27 +129,46 @@ class Agent(QThread):
 
     def submit(self, message: str) -> None:
         loop = self._loop
-        if loop is None or not self.is_ready():
-            self.show_reply.emit(AGENT_NOT_READY_SPEECH)
-            self.speak_sentence.emit(AGENT_NOT_READY_SPEECH)
-            self.speech_complete.emit()
+        if loop is None or not self._ready.is_set():
+            self._deliver_speech(AGENT_NOT_READY_SPEECH)
+            return
+
+        if self._client is None:
+            asyncio.run_coroutine_threadsafe(self._recover_then_run(message), loop)
             return
 
         asyncio.run_coroutine_threadsafe(self._run_turn(message), loop)
 
+    def _deliver_speech(self, text: str) -> None:
+        self.show_reply.emit(text)
+        self.speak_sentence.emit(text)
+        self.speech_complete.emit()
+        self.thinking_ended.emit()
+
+    async def _recover_then_run(self, message: str) -> None:
+        async with self._turn_lock:
+            connected = await self._connect_or_deflect(announce_offline=False)
+
+        if connected:
+            await self._run_turn(message)
+            return
+
+        if self._offline:
+            self.offline_detected.emit(pick_offline_line())
+            self.thinking_ended.emit()
+        else:
+            self._deliver_speech(AGENT_ERROR_SPEECH)
+
     def reset_session(self) -> None:
         loop = self._loop
-        if loop is None or not self.is_ready():
+        if loop is None or not self._ready.is_set():
             return
         asyncio.run_coroutine_threadsafe(self._reset_session(), loop)
 
     async def _reset_session(self) -> None:
         async with self._turn_lock:
             await self._close_client()
-            try:
-                await self._open_client()
-            except Exception as exc:
-                self.error_occurred.emit(str(exc))
+            await self._connect_or_deflect(announce_offline=True)
 
     async def _run_turn(self, message: str) -> None:
         async with self._turn_lock:
@@ -145,6 +181,7 @@ class Agent(QThread):
             reply = ""
             saw_delta = False
             spoke = False
+            offline_line: str | None = None
 
             try:
                 await self._client.query(message)
@@ -187,15 +224,23 @@ class Agent(QThread):
 
             except Exception as exc:
                 if not self._interrupted.is_set():
-                    self.error_occurred.emit(str(exc))
-                    if not spoke:
-                        reply = AGENT_ERROR_SPEECH
-                        spoke = self._speak(AGENT_ERROR_SPEECH, spoke)
+                    if await asyncio.to_thread(is_online):
+                        self.error_occurred.emit(str(exc))
+                        if not spoke:
+                            reply = AGENT_ERROR_SPEECH
+                            spoke = self._speak(AGENT_ERROR_SPEECH, spoke)
+                    else:
+                        self._offline = True
+                        await self._close_client()
+                        offline_line = pick_offline_line()
 
             finally:
                 if reply:
                     self.show_reply.emit(reply)
-                self.speech_complete.emit()
+                if offline_line is not None:
+                    self.offline_detected.emit(offline_line)
+                else:
+                    self.speech_complete.emit()
                 self.thinking_ended.emit()
 
     def _speak(self, sentence: str, already_spoke: bool) -> bool:
