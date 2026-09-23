@@ -2,7 +2,6 @@ import faulthandler
 import sys
 import traceback
 import weakref
-
 from PyQt6.QtCore import QThread, QtMsgType, qInstallMessageHandler
 
 from app.config import LOG_PREFIX_ERROR, QTHREAD_DIAGNOSTICS_ENABLED, QTHREAD_LOG_PREFIX

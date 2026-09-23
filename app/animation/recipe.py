@@ -12,6 +12,10 @@ class Recipe:
         self.ingredient_lookup = build_ingredient_lookup(self.ingredients)
 
 
+def ingredient_color(ingredient):
+    return ingredient.get("color_hex") or ingredient.get("color") or ANIM_COLOR_DEFAULT_INGREDIENT
+
+
 def build_ingredient_lookup(ingredients):
     lookup = {}
     for ingredient in ingredients:
@@ -20,7 +24,7 @@ def build_ingredient_lookup(ingredients):
         data = {
             "id": ing_id,
             "name": ing_name,
-            "color": ingredient.get("color_hex") or ingredient.get("color") or ANIM_COLOR_DEFAULT_INGREDIENT,
+            "color": ingredient_color(ingredient),
             "type": ingredient.get("type", "liquid").lower(),
         }
         if ing_id:

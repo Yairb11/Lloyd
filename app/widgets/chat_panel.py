@@ -6,13 +6,14 @@ from app.config import (
     AGENT_RENDER_FAILED_PREFIX, AGENT_RENDER_STARTED_TEXT, AGENT_RENDER_STATUS_TEXT,
     ANIM_BACKEND, ANIM_BACKEND_BOTH, ANIM_BACKEND_CANVAS,
     ANIM_BACKEND_MANIM, CHAT_CLEAR_COMMAND_TEXT, CHAT_CLEAR_VOICE_MATCH_THRESHOLD,
-    CHAT_CLEAR_VOICE_PHRASE, CHAT_HISTORY_SPACING, CHAT_INPUT_PLACEHOLDER,
+    CHAT_CLEAR_VOICE_PHRASES, CHAT_HISTORY_SPACING, CHAT_INPUT_PLACEHOLDER,
     CHAT_INPUT_ROW_SPACING, CHAT_PANEL_MARGIN, CHAT_PANEL_MIN_WIDTH,
     CHAT_PANEL_SPACING, CHAT_SEND_BUTTON_TEXT, CHAT_STOP_BUTTON_TEXT,
     LOG_PREFIX_AGENT, OBJECT_NAME_CHAT_HISTORY, OBJECT_NAME_CHAT_PANEL,
     OBJECT_NAME_SEND_BUTTON,
 )
 from app.core import perf
+from app.core.text import normalize_voice_command
 from app.render import RenderController
 from app.threads import Agent, LloydSpeaker
 from app.widgets.chat_bubble import ChatBubble
@@ -151,10 +152,17 @@ class ChatPanel(QWidget):
         self.agent.submit(message)
 
     def _is_clear_chat_command(self, message: str, *, via_voice: bool) -> bool:
-        normalized = message.lower()
-        if via_voice:
-            return fuzz.ratio(CHAT_CLEAR_VOICE_PHRASE, normalized) >= CHAT_CLEAR_VOICE_MATCH_THRESHOLD
-        return normalized == CHAT_CLEAR_COMMAND_TEXT
+        if not via_voice:
+            return message.lower() == CHAT_CLEAR_COMMAND_TEXT
+
+        spoken = normalize_voice_command(message)
+        if not spoken:
+            return False
+
+        return any(
+            fuzz.ratio(phrase, spoken) >= CHAT_CLEAR_VOICE_MATCH_THRESHOLD
+            for phrase in CHAT_CLEAR_VOICE_PHRASES
+        )
 
     def _clear_chat(self) -> None:
         while self.history_layout.count() > 1:

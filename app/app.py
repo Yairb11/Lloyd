@@ -1,7 +1,6 @@
 import os
 import sys
 import traceback
-
 from PyQt6.QtWidgets import QApplication
 
 from app.config import APP_NAME, ORG_NAME

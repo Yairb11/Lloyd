@@ -15,6 +15,7 @@ VOICE_WAKE_GRAMMAR_UNKNOWN_TOKEN: str = "[unk]"
 
 VOICE_VOSK_WAKE_MODEL_DIR: str = "models/vosk-model-small-en-us-0.15"
 VOICE_COMMAND_MODEL_WARMUP_SECONDS: float = 1.0
+VOICE_COMMAND_PUNCTUATION_PATTERN: str = r"[^\w\s]"
 
 VOICE_WHISPER_MODEL_SIZE: str = "distil-small.en"
 VOICE_WHISPER_DEVICE: str = "cpu"

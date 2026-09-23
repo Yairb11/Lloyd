@@ -24,16 +24,16 @@ from app.config import (
     VOICE_SAMPLE_RATE_HZ, VOICE_STOP_KEYWORD, VOICE_STOP_KEYWORD_MATCH_THRESHOLD,
     VOICE_STOP_PHRASE, VOICE_STREAM_TRANSCRIPT_ENABLED, VOICE_VAD_ENABLED,
     VOICE_VOSK_WAKE_MODEL_DIR, VOICE_WAKE_GRAMMAR_ENABLED, VOICE_WAKE_GRAMMAR_UNKNOWN_TOKEN,
-    VOICE_WAKE_GREETINGS, VOICE_WAKE_GREETING_MATCH_THRESHOLD, VOICE_WAKE_KEYWORD,
-    VOICE_WAKE_KEYWORD_MATCH_THRESHOLD, VOICE_WAKE_KEYWORD_MAX_WORDS, VOICE_WAKE_KEYWORD_VARIANTS,
-    VOICE_WAKE_REFRACTORY_S, VOICE_WHISPER_BEAM_SIZE, VOICE_WHISPER_BEST_OF,
-    VOICE_WHISPER_COMPUTE_TYPE, VOICE_WHISPER_CONDITION_ON_PREVIOUS_TEXT, VOICE_WHISPER_CPU_THREADS,
-    VOICE_WHISPER_DEVICE, VOICE_WHISPER_DOWNLOAD_ROOT, VOICE_WHISPER_LANGUAGE,
-    VOICE_WHISPER_MODEL_SIZE, VOICE_WHISPER_TEMPERATURE, VOICE_WHISPER_VAD_FILTER,
-    VOICE_WHISPER_WITHOUT_TIMESTAMPS,
+    VOICE_WAKE_GREETINGS, VOICE_WAKE_KEYWORD, VOICE_WAKE_KEYWORD_MAX_WORDS,
+    VOICE_WAKE_KEYWORD_VARIANTS, VOICE_WAKE_REFRACTORY_S, VOICE_WHISPER_BEAM_SIZE,
+    VOICE_WHISPER_BEST_OF, VOICE_WHISPER_COMPUTE_TYPE, VOICE_WHISPER_CONDITION_ON_PREVIOUS_TEXT,
+    VOICE_WHISPER_CPU_THREADS, VOICE_WHISPER_DEVICE, VOICE_WHISPER_DOWNLOAD_ROOT,
+    VOICE_WHISPER_LANGUAGE, VOICE_WHISPER_MODEL_SIZE, VOICE_WHISPER_TEMPERATURE,
+    VOICE_WHISPER_VAD_FILTER, VOICE_WHISPER_WITHOUT_TIMESTAMPS,
 )
 from app.core import perf
 from app.core.qthread_support import track
+from app.core.text import is_wake_greeting, is_wake_keyword
 
 
 def _build_wake_grammar() -> str:
@@ -43,18 +43,6 @@ def _build_wake_grammar() -> str:
         for greeting in VOICE_WAKE_GREETINGS:
             phrases.add(f"{greeting} {variant}")
     return json.dumps(sorted(phrases) + [VOICE_WAKE_GRAMMAR_UNKNOWN_TOKEN])
-
-
-def _best_score(word: str, candidates: tuple[str, ...]) -> int:
-    return max(fuzz.ratio(candidate, word) for candidate in candidates)
-
-
-def _is_keyword(word: str) -> bool:
-    return _best_score(word, VOICE_WAKE_KEYWORD_VARIANTS) >= VOICE_WAKE_KEYWORD_MATCH_THRESHOLD
-
-
-def _is_greeting(word: str) -> bool:
-    return _best_score(word, VOICE_WAKE_GREETINGS) >= VOICE_WAKE_GREETING_MATCH_THRESHOLD
 
 
 def _is_stop_keyword(word: str) -> bool:
@@ -269,10 +257,10 @@ class VoiceListener(QThread):
         if not words:
             return False
 
-        if not _is_keyword(words[-1]):
+        if not is_wake_keyword(words[-1]):
             return False
 
-        if len(words) >= 2 and _is_greeting(words[-2]):
+        if len(words) >= 2 and is_wake_greeting(words[-2]):
             return True
 
         return len(words) <= VOICE_WAKE_KEYWORD_MAX_WORDS
@@ -282,7 +270,7 @@ class VoiceListener(QThread):
         if len(words) < 2:
             return False
 
-        return _is_keyword(words[-2]) and _is_stop_keyword(words[-1])
+        return is_wake_keyword(words[-2]) and _is_stop_keyword(words[-1])
 
     def _capture_command(self) -> str:
         preroll = self._take_preroll()

@@ -1,6 +1,5 @@
 import asyncio
 import threading
-
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from app.audio.playback import AmplitudePlayer, silence_pcm

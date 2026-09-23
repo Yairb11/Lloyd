@@ -1,7 +1,6 @@
 import asyncio
 import io
 import threading
-
 import numpy as np
 
 from app.config import (

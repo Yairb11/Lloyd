@@ -133,6 +133,10 @@ def _ellipse(width: float, height: float) -> QPainterPath:
     return path
 
 
+def make_dot(color: str, radius: float) -> ShapeItem:
+    return ShapeItem(_ellipse(radius * 2, radius * 2), fill=color)
+
+
 def make_ice_cube() -> ShapeItem:
     return ShapeItem(
         _rounded(ANIM_ICE_CUBE_SIZE, ANIM_ICE_CUBE_SIZE, ANIM_ICE_CUBE_CORNER_RADIUS),

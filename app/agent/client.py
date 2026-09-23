@@ -1,5 +1,4 @@
 from typing import Any
-
 from claude_agent_sdk import ClaudeAgentOptions, create_sdk_mcp_server
 
 from app.agent.prompt import build_system_prompt

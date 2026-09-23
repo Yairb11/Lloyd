@@ -8,7 +8,7 @@ from manim import (
     UP, VGroup, WHITE,
 )
 
-from app.animation.recipe import format_ingredient_label
+from app.animation.recipe import format_ingredient_label, ingredient_color
 from app.config import (
     ANIM_COLOR_ICE, ANIM_COLOR_MUDDLER_WOOD_DARK, ANIM_COLOR_MUDDLER_WOOD_DARKEST,
     ANIM_COLOR_MUDDLER_WOOD_LIGHT, ANIM_COLOR_MUDDLER_WOOD_MEDIUM, ANIM_COLOR_SPOON_INNER,
@@ -42,10 +42,7 @@ def _offset(dx, dy):
 
 
 def create_ingredient_entry(ingredient, font_size):
-    dot = Dot(
-        radius=ANIM_INGREDIENT_DOT_RADIUS,
-        color=ingredient.get("color_hex") or ingredient.get("color") or WHITE,
-    )
+    dot = Dot(radius=ANIM_INGREDIENT_DOT_RADIUS, color=ingredient_color(ingredient))
     label = Text(format_ingredient_label(ingredient), font_size=font_size, color=LIGHT_GRAY)
     return VGroup(dot, label).arrange(RIGHT, buff=ANIM_INGREDIENT_ENTRY_BUFF)
 

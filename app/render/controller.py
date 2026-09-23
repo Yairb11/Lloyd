@@ -4,7 +4,6 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
-
 from PyQt6.QtCore import QObject, QProcess, pyqtSignal
 
 from app.config import (

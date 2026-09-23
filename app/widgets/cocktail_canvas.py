@@ -1,6 +1,5 @@
 import functools
 import math
-
 from PyQt6.QtCore import (
     QEasingCurve, QParallelAnimationGroup, QPauseAnimation,
     QPropertyAnimation, QRectF, QSequentialAnimationGroup,
@@ -10,39 +9,43 @@ from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView
 
 from app.animation.recipe import (
-    Recipe, is_top_step, needs_shaker,
-    wrap_instruction,
+    Recipe, format_ingredient_label, ingredient_color,
+    is_top_step, needs_shaker, wrap_instruction,
 )
 from app.config import (
-    ANIM_CANVAS_FADE_MS, ANIM_CANVAS_HOLD_MS, ANIM_CANVAS_LOOP_COUNT,
-    ANIM_CANVAS_SCENE_HEIGHT, ANIM_CANVAS_SCENE_WIDTH, ANIM_CANVAS_STEP_DESC_PT,
-    ANIM_CANVAS_STEP_PAUSE_MS, ANIM_CANVAS_STEP_TITLE_PT, ANIM_CANVAS_TITLE_PT,
-    ANIM_COLOR_DEFAULT_GARNISH, ANIM_COLOR_DEFAULT_LIQUID, ANIM_COLOR_DEFAULT_MUDDLE_BLEND,
-    ANIM_COLOR_DEFAULT_SHAKE_BLEND, ANIM_COLOR_DEFAULT_STIR_BLEND, ANIM_COLOR_DEFAULT_STRAIN,
-    ANIM_COLOR_FOAM, ANIM_GARNISH_SIDE_OFFSET, ANIM_GARNISH_SURFACE_Y_OFFSET,
-    ANIM_ICE_CUBE_COUNT_PREP, ANIM_ICE_CUBE_COUNT_SERVING, ANIM_ICE_CUBE_HEIGHT_DELTA,
-    ANIM_ICE_CUBE_X_SPACING, ANIM_ICE_CUBE_Y_OFFSET, ANIM_ICE_LARGE_HEIGHT_DELTA,
-    ANIM_ICE_LARGE_Y_OFFSET, ANIM_LABEL_MIXING_GLASS, ANIM_LABEL_SERVING_GLASS,
-    ANIM_LABEL_SHAKER, ANIM_LAYER_DEFAULT_OPACITY, ANIM_MEASURE_DASH_HEIGHT_SCALE,
-    ANIM_MEASURE_DEFAULT_AMOUNT_ML, ANIM_MEASURE_FALLBACK_THICKNESS, ANIM_MEASURE_MAX_FILL_MARGIN,
-    ANIM_MEASURE_MIN_AVAILABLE_HEIGHT, ANIM_MEASURE_STREAM_START_OFFSET, ANIM_MEASURE_STREAM_STROKE_WIDTH_LIQUID,
-    ANIM_MEASURE_STREAM_STROKE_WIDTH_OTHER, ANIM_MEASURE_TOP_MARGIN, ANIM_MEASURE_TOP_MIN_THICKNESS,
-    ANIM_ML_TO_HEIGHT_SCALE, ANIM_MUDDLER_STROKES, ANIM_SHAKE_WIGGLE_COUNT,
-    ANIM_SHAKE_WIGGLE_ROTATION, ANIM_SOLID_HEIGHT_DELTA, ANIM_SOLID_Y_OFFSET,
-    ANIM_STEP_WRAP_WORDS_PER_LINE, ANIM_STIR_ORBIT_RADIUS_RATIO, ANIM_STIR_ORBIT_RY,
-    ANIM_STIR_ORBIT_Y_OFFSET, ANIM_STRAIN_FOAM_THICKNESS, ANIM_STRAIN_RIM_MARGIN,
-    ANIM_STRAIN_TILT_ANGLE, ANIM_VESSEL_LABEL_OPACITY, ANIM_VESSEL_PAIR_X_OFFSET,
-    ANIM_VESSEL_Y_OFFSET, COLOR_CANVAS_BG,
+    ANIM_CANVAS_FADE_MS, ANIM_CANVAS_HOLD_MS, ANIM_CANVAS_INGREDIENT_DOT_RADIUS,
+    ANIM_CANVAS_INGREDIENT_DOT_Y_OFFSET, ANIM_CANVAS_INGREDIENT_LABEL_COLOR, ANIM_CANVAS_INGREDIENT_LABEL_X_OFFSET,
+    ANIM_CANVAS_INGREDIENT_PANEL_X_INSET, ANIM_CANVAS_INGREDIENT_PANEL_Y_INSET, ANIM_CANVAS_INGREDIENT_PT_COMPACT,
+    ANIM_CANVAS_INGREDIENT_PT_NORMAL, ANIM_CANVAS_INGREDIENT_ROW_SPACING_COMPACT, ANIM_CANVAS_INGREDIENT_ROW_SPACING_NORMAL,
+    ANIM_CANVAS_LOOP_COUNT, ANIM_CANVAS_SCENE_HEIGHT, ANIM_CANVAS_SCENE_WIDTH,
+    ANIM_CANVAS_STEP_DESC_PT, ANIM_CANVAS_STEP_PAUSE_MS, ANIM_CANVAS_STEP_TITLE_PT,
+    ANIM_CANVAS_TITLE_PT, ANIM_COLOR_DEFAULT_GARNISH, ANIM_COLOR_DEFAULT_LIQUID,
+    ANIM_COLOR_DEFAULT_MUDDLE_BLEND, ANIM_COLOR_DEFAULT_SHAKE_BLEND, ANIM_COLOR_DEFAULT_STIR_BLEND,
+    ANIM_COLOR_DEFAULT_STRAIN, ANIM_COLOR_FOAM, ANIM_GARNISH_SIDE_OFFSET,
+    ANIM_GARNISH_SURFACE_Y_OFFSET, ANIM_ICE_CUBE_COUNT_PREP, ANIM_ICE_CUBE_COUNT_SERVING,
+    ANIM_ICE_CUBE_HEIGHT_DELTA, ANIM_ICE_CUBE_X_SPACING, ANIM_ICE_CUBE_Y_OFFSET,
+    ANIM_ICE_LARGE_HEIGHT_DELTA, ANIM_ICE_LARGE_Y_OFFSET, ANIM_INGREDIENT_COMPACT_THRESHOLD,
+    ANIM_LABEL_MIXING_GLASS, ANIM_LABEL_SERVING_GLASS, ANIM_LABEL_SHAKER,
+    ANIM_LAYER_DEFAULT_OPACITY, ANIM_MEASURE_DASH_HEIGHT_SCALE, ANIM_MEASURE_DEFAULT_AMOUNT_ML,
+    ANIM_MEASURE_FALLBACK_THICKNESS, ANIM_MEASURE_MAX_FILL_MARGIN, ANIM_MEASURE_MIN_AVAILABLE_HEIGHT,
+    ANIM_MEASURE_STREAM_START_OFFSET, ANIM_MEASURE_STREAM_STROKE_WIDTH_LIQUID, ANIM_MEASURE_STREAM_STROKE_WIDTH_OTHER,
+    ANIM_MEASURE_TOP_MARGIN, ANIM_MEASURE_TOP_MIN_THICKNESS, ANIM_ML_TO_HEIGHT_SCALE,
+    ANIM_MUDDLER_STROKES, ANIM_SHAKE_WIGGLE_COUNT, ANIM_SHAKE_WIGGLE_ROTATION,
+    ANIM_SOLID_HEIGHT_DELTA, ANIM_SOLID_Y_OFFSET, ANIM_STEP_WRAP_WORDS_PER_LINE,
+    ANIM_STIR_ORBIT_RADIUS_RATIO, ANIM_STIR_ORBIT_RY, ANIM_STIR_ORBIT_Y_OFFSET,
+    ANIM_STRAIN_FOAM_THICKNESS, ANIM_STRAIN_RIM_MARGIN, ANIM_STRAIN_TILT_ANGLE,
+    ANIM_VESSEL_LABEL_OPACITY, ANIM_VESSEL_PAIR_X_OFFSET, ANIM_VESSEL_Y_OFFSET,
+    COLOR_CANVAS_BG,
 )
 from app.core import perf
 from app.core.color import hex_to_rgb, rgb_to_hex
 from app.widget_helpers.canvas_geometry import qp, vessel_shape
 from app.widget_helpers.canvas_items import (
-    GroupItem, make_garnish, make_ice_cube,
-    make_ice_rock, make_ice_sphere, make_label,
-    make_layer, make_muddler, make_pour_curve,
-    make_solid, make_spoon, make_stream,
-    make_text, make_vessel,
+    GroupItem, make_dot, make_garnish,
+    make_ice_cube, make_ice_rock, make_ice_sphere,
+    make_label, make_layer, make_muddler,
+    make_pour_curve, make_solid, make_spoon,
+    make_stream, make_text, make_vessel,
 )
 
 SERVING_GLASS = "serving_glass"
@@ -132,6 +135,7 @@ class CocktailCanvas(QGraphicsView):
         sequence = QSequentialAnimationGroup(self)
 
         self._add_title(sequence)
+        self._add_ingredient_panel(sequence)
         self._setup_vessels()
 
         for step in self._recipe.steps:
@@ -195,6 +199,43 @@ class CocktailCanvas(QGraphicsView):
         title.setPos(qp(-ANIM_CANVAS_SCENE_WIDTH / 2 + 0.4, ANIM_CANVAS_SCENE_HEIGHT / 2 - 0.3))
         self._track(title)
         sequence.addAnimation(self._fade_in(title))
+
+    def _add_ingredient_panel(self, sequence) -> None:
+        ingredients = self._recipe.ingredients
+        if not ingredients:
+            return
+
+        compact = len(ingredients) > ANIM_INGREDIENT_COMPACT_THRESHOLD
+        point_size = ANIM_CANVAS_INGREDIENT_PT_COMPACT if compact else ANIM_CANVAS_INGREDIENT_PT_NORMAL
+        row_spacing = (
+            ANIM_CANVAS_INGREDIENT_ROW_SPACING_COMPACT
+            if compact
+            else ANIM_CANVAS_INGREDIENT_ROW_SPACING_NORMAL
+        )
+
+        panel_x = ANIM_CANVAS_SCENE_WIDTH / 2 - ANIM_CANVAS_INGREDIENT_PANEL_X_INSET
+        panel_y = ANIM_CANVAS_SCENE_HEIGHT / 2 - ANIM_CANVAS_INGREDIENT_PANEL_Y_INSET
+
+        group = QParallelAnimationGroup(self)
+        for index, ingredient in enumerate(ingredients):
+            row_y = panel_y - index * row_spacing
+
+            dot = make_dot(ingredient_color(ingredient), ANIM_CANVAS_INGREDIENT_DOT_RADIUS)
+            dot.setPos(qp(panel_x, row_y - ANIM_CANVAS_INGREDIENT_DOT_Y_OFFSET))
+            self._track(dot)
+
+            label = make_text(
+                format_ingredient_label(ingredient),
+                point_size,
+                ANIM_CANVAS_INGREDIENT_LABEL_COLOR,
+            )
+            label.setPos(qp(panel_x + ANIM_CANVAS_INGREDIENT_LABEL_X_OFFSET, row_y))
+            self._track(label)
+
+            group.addAnimation(self._fade_in(dot))
+            group.addAnimation(self._fade_in(label))
+
+        sequence.addAnimation(group)
 
     def _setup_vessels(self) -> None:
         recipe = self._recipe

@@ -2,7 +2,6 @@ import asyncio
 import itertools
 import re
 import threading
-
 from claude_agent_sdk import AssistantMessage, ClaudeSDKClient, ResultMessage, TextBlock
 from claude_agent_sdk.types import StreamEvent
 from PyQt6.QtCore import QThread, pyqtSignal

@@ -1,6 +1,5 @@
 import copy
 from typing import Any
-
 from claude_agent_sdk import tool
 from jsonschema import ValidationError, validate
 

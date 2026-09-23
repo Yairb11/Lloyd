@@ -1,6 +1,5 @@
 import os
 import sys
-
 from PyQt6.QtCore import Qt, QUrl
 from PyQt6.QtGui import QCursor
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer

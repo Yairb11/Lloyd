@@ -2,7 +2,6 @@ import base64
 import json
 import mimetypes
 from pathlib import Path
-
 from claude_agent_sdk import (
     AssistantMessage, ClaudeAgentOptions, ClaudeSDKClient,
     ResultMessage, TextBlock,

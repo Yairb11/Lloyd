@@ -12,7 +12,9 @@ CHAT_BUBBLE_RADIUS: int = 14
 CHAT_BUBBLE_PADDING: int = 10
 
 CHAT_CLEAR_COMMAND_TEXT: str = "/clear"
-CHAT_CLEAR_VOICE_PHRASE: str = "clean the chat"
+CHAT_CLEAR_VOICE_PHRASES: tuple[str, ...] = (
+    "clear the chat", "clean the chat", "clear chat", "clean chat",
+)
 CHAT_CLEAR_VOICE_MATCH_THRESHOLD: int = 85
 
 TYPING_DOT_COUNT: int = 3
