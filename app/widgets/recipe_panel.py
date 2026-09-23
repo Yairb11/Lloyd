@@ -1,242 +1,218 @@
-from PyQt6.QtCore import QPoint, QRect, Qt
-from PyQt6.QtGui import QCursor
+import html
+from typing import Any
+
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel,
-    QLayout, QPushButton, QScrollArea,
+    QFrame, QGridLayout, QHBoxLayout,
+    QLabel, QLayout, QScrollArea,
     QVBoxLayout, QWidget,
 )
 
 from app.config import (
-    COLOR_RECIPE_BADGE_BG, COLOR_RECIPE_BG, COLOR_RECIPE_BORDER,
-    COLOR_RECIPE_CLOSE_BG, COLOR_RECIPE_CLOSE_HOVER_BG, COLOR_RECIPE_CLOSE_TEXT,
-    COLOR_RECIPE_GARNISH_TEXT, COLOR_RECIPE_INGREDIENTS_BG, COLOR_RECIPE_INGREDIENT_NAME,
-    COLOR_RECIPE_INGREDIENT_VALUE, COLOR_RECIPE_STEP_BADGE_BG, COLOR_RECIPE_STEP_TEXT,
-    COLOR_RECIPE_TITLE, FONT_SIZE_RECIPE_BADGE, FONT_SIZE_RECIPE_CLOSE_BUTTON,
-    FONT_SIZE_RECIPE_GARNISH, FONT_SIZE_RECIPE_INGREDIENT, FONT_SIZE_RECIPE_STEP,
-    FONT_SIZE_RECIPE_STEP_BADGE, FONT_SIZE_RECIPE_TITLE, OBJECT_NAME_RECIPE_WIDGET,
-    RECIPE_POPUP_BORDER_MARGIN, RECIPE_POPUP_BORDER_RADIUS, RECIPE_POPUP_BORDER_WIDTH,
-    RECIPE_POPUP_CLOSE_BUTTON_RADIUS, RECIPE_POPUP_CLOSE_BUTTON_SIZE, RECIPE_POPUP_CLOSE_GLYPH,
-    RECIPE_POPUP_DEFAULT_HEIGHT, RECIPE_POPUP_DEFAULT_TITLE, RECIPE_POPUP_DEFAULT_WIDTH,
-    RECIPE_POPUP_HEADER_HEIGHT, RECIPE_POPUP_MIN_HEIGHT, RECIPE_POPUP_MIN_WIDTH,
-    RECIPE_POPUP_POSITION_OFFSET, RECIPE_POPUP_STEP_BADGE_SIZE, RECIPE_POPUP_TITLE_MAX_LENGTH,
+    HUD_POSITION_OFFSET, OBJECT_NAME_RECIPE_AMOUNT, OBJECT_NAME_RECIPE_AMOUNT_TOP_UP,
+    OBJECT_NAME_RECIPE_BADGE, OBJECT_NAME_RECIPE_DIVIDER, OBJECT_NAME_RECIPE_INGREDIENT_NAME,
+    OBJECT_NAME_RECIPE_SCROLL, OBJECT_NAME_RECIPE_SECTION_LINE, OBJECT_NAME_RECIPE_STEP_BODY,
+    OBJECT_NAME_RECIPE_STEP_NUMBER, OBJECT_NAME_RECIPE_TABLE, OBJECT_NAME_RECIPE_TITLE,
+    OBJECT_NAME_RECIPE_WIDGET, PANEL_RESIZE_SIDE_LEFT, RECIPE_CARD_BADGE_HEIGHT,
+    RECIPE_CARD_BADGE_SPACING, RECIPE_CARD_DIVIDER_HEIGHT, RECIPE_CARD_PIP_SIZE,
+    RECIPE_CARD_SECTION_GAP, RECIPE_CARD_SECTION_LINE_HEIGHT, RECIPE_CARD_STEP_COLUMN_SPACING,
+    RECIPE_CARD_STEP_NUMBER_WIDTH, RECIPE_CARD_STEP_SPACING, RECIPE_CARD_TABLE_COLUMN_SPACING,
+    RECIPE_CARD_TABLE_PADDING_H, RECIPE_CARD_TABLE_PADDING_V, RECIPE_CARD_TABLE_ROW_SPACING,
+    RECIPE_CARD_TITLE_SPACING, RECIPE_POPUP_DEFAULT_HEIGHT, RECIPE_POPUP_DEFAULT_WIDTH,
+    RECIPE_POPUP_MAX_SCREEN_RATIO, RECIPE_POPUP_MIN_HEIGHT, RECIPE_POPUP_MIN_WIDTH,
+    RECIPE_STEP_BODY_HTML, RECIPE_STEP_LINE_HEIGHT_PERCENT, RECIPE_TITLE_HTML,
+    SCROLLBAR_WIDTH,
 )
+from app.widget_helpers.recipe_style import build_pip_style, build_recipe_stylesheet
+from app.widgets import recipe_content
+from app.widgets.floating_panel import FloatingPanel
+
+_INGREDIENT_COLUMN_PIP: int = 0
+_INGREDIENT_COLUMN_NAME: int = 1
+_INGREDIENT_COLUMN_AMOUNT: int = 2
+_INGREDIENT_COLUMN_SPAN: int = 3
+_EMPTY_PANEL_TITLE: str = ""
 
 
-class TopRightRecipyWidget(QFrame):
+class TopRightRecipyWidget(FloatingPanel):
     def __init__(self, parent=None, width: int = RECIPE_POPUP_DEFAULT_WIDTH, height: int = RECIPE_POPUP_DEFAULT_HEIGHT):
-        super().__init__(parent)
-        self.setMinimumSize(RECIPE_POPUP_MIN_WIDTH, RECIPE_POPUP_MIN_HEIGHT)
-        self.resize(width, height)
-        self.setMouseTracking(True)
-
-        self._resizing = False
-        self._resize_edges = {"bottom": False, "left": False}
-        self._press_pos = QPoint()
-        self._press_geom = QRect()
-
-        self.setStyleSheet(f"""
-            QFrame#{OBJECT_NAME_RECIPE_WIDGET} {{
-                background-color: {COLOR_RECIPE_BG};
-                border: {RECIPE_POPUP_BORDER_WIDTH}px solid {COLOR_RECIPE_BORDER};
-                border-radius: {RECIPE_POPUP_BORDER_RADIUS}px;
-            }}
-        """)
-        self.setObjectName(OBJECT_NAME_RECIPE_WIDGET)
-
-        outer_layout = QVBoxLayout(self)
-        outer_layout.setContentsMargins(10, 8, 10, 10)
-        outer_layout.setSpacing(8)
-
-        self.header_frame = QFrame(self)
-        self.header_frame.setFixedHeight(RECIPE_POPUP_HEADER_HEIGHT)
-        self.header_frame.setStyleSheet("background: transparent; border: none;")
-        header_layout = QHBoxLayout(self.header_frame)
-        header_layout.setContentsMargins(2, 0, 2, 0)
-        header_layout.setSpacing(4)
-
-        self.title_label = QLabel(RECIPE_POPUP_DEFAULT_TITLE, self.header_frame)
-        self.title_label.setStyleSheet(
-            f"color: {COLOR_RECIPE_TITLE}; font-weight: bold; font-size: {FONT_SIZE_RECIPE_TITLE}px; border: none;"
+        super().__init__(
+            parent=parent,
+            width=width,
+            height=height,
+            min_width=RECIPE_POPUP_MIN_WIDTH,
+            min_height=RECIPE_POPUP_MIN_HEIGHT,
+            object_name=OBJECT_NAME_RECIPE_WIDGET,
+            title=_EMPTY_PANEL_TITLE,
+            resize_side=PANEL_RESIZE_SIDE_LEFT,
         )
-        header_layout.addWidget(self.title_label)
-        header_layout.addStretch()
-
-        close_btn = QPushButton(RECIPE_POPUP_CLOSE_GLYPH, self.header_frame)
-        close_btn.setFixedSize(RECIPE_POPUP_CLOSE_BUTTON_SIZE, RECIPE_POPUP_CLOSE_BUTTON_SIZE)
-        close_btn.setStyleSheet(f"""
-            QPushButton {{
-                color: {COLOR_RECIPE_CLOSE_TEXT};
-                background-color: {COLOR_RECIPE_CLOSE_BG};
-                border: none;
-                border-radius: {RECIPE_POPUP_CLOSE_BUTTON_RADIUS}px;
-                font-size: {FONT_SIZE_RECIPE_CLOSE_BUTTON}px;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{ background-color: {COLOR_RECIPE_CLOSE_HOVER_BG}; }}
-        """)
-        close_btn.clicked.connect(self.hide)
-        header_layout.addWidget(close_btn)
-
-        outer_layout.addWidget(self.header_frame)
-
-        badge_row = QHBoxLayout()
-        badge_row.setSpacing(6)
-        self.glass_badge = self._make_badge(badge_row)
-        self.technique_badge = self._make_badge(badge_row)
-        self.ice_badge = self._make_badge(badge_row)
-
-        self.badge_row_widget = QWidget(self)
-        self.badge_row_widget.setLayout(badge_row)
-        outer_layout.addWidget(self.badge_row_widget)
 
         self.scroll_area = QScrollArea(self)
+        self.scroll_area.setObjectName(OBJECT_NAME_RECIPE_SCROLL)
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
-        self.scroll_area.setStyleSheet("background: transparent; border: none;")
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.add_body_widget(self.scroll_area)
 
         self.content_widget = QWidget()
         content_layout = QVBoxLayout(self.content_widget)
         content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(8)
+        content_layout.setSpacing(RECIPE_CARD_SECTION_GAP)
 
-        self.ingredients_card = QFrame(self.content_widget)
-        self.ingredients_card.setStyleSheet(
-            f"background-color: {COLOR_RECIPE_INGREDIENTS_BG}; border-radius: 6px;"
+        self.title_section = QWidget(self.content_widget)
+        title_layout = QVBoxLayout(self.title_section)
+        title_layout.setContentsMargins(0, 0, 0, 0)
+        title_layout.setSpacing(RECIPE_CARD_TITLE_SPACING)
+
+        self.recipe_title_label = QLabel(_EMPTY_PANEL_TITLE, self.title_section)
+        self.recipe_title_label.setObjectName(OBJECT_NAME_RECIPE_TITLE)
+        self.recipe_title_label.setTextFormat(Qt.TextFormat.RichText)
+        self.recipe_title_label.setWordWrap(True)
+        self.recipe_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_layout.addWidget(self.recipe_title_label)
+
+        self.badge_row = QHBoxLayout()
+        self.badge_row.setContentsMargins(0, 0, 0, 0)
+        self.badge_row.setSpacing(RECIPE_CARD_BADGE_SPACING)
+        title_layout.addLayout(self.badge_row)
+
+        content_layout.addWidget(self.title_section)
+
+        self.title_section_line = self._make_section_line()
+        content_layout.addWidget(self.title_section_line)
+
+        self.ingredients_table = QFrame(self.content_widget)
+        self.ingredients_table.setObjectName(OBJECT_NAME_RECIPE_TABLE)
+        self.ingredients_layout = QGridLayout(self.ingredients_table)
+        self.ingredients_layout.setContentsMargins(
+            RECIPE_CARD_TABLE_PADDING_H, RECIPE_CARD_TABLE_PADDING_V,
+            RECIPE_CARD_TABLE_PADDING_H, RECIPE_CARD_TABLE_PADDING_V,
         )
-        self.ingredients_layout = QVBoxLayout(self.ingredients_card)
-        self.ingredients_layout.setContentsMargins(10, 8, 10, 8)
-        self.ingredients_layout.setSpacing(4)
-        content_layout.addWidget(self.ingredients_card)
+        self.ingredients_layout.setHorizontalSpacing(RECIPE_CARD_TABLE_COLUMN_SPACING)
+        self.ingredients_layout.setVerticalSpacing(RECIPE_CARD_TABLE_ROW_SPACING)
+        self.ingredients_layout.setColumnStretch(_INGREDIENT_COLUMN_NAME, 1)
+        content_layout.addWidget(self.ingredients_table)
+
+        self.ingredients_section_line = self._make_section_line()
+        content_layout.addWidget(self.ingredients_section_line)
 
         self.steps_layout = QVBoxLayout()
-        self.steps_layout.setSpacing(8)
+        self.steps_layout.setContentsMargins(0, 0, 0, 0)
+        self.steps_layout.setSpacing(RECIPE_CARD_STEP_SPACING)
         content_layout.addLayout(self.steps_layout)
-
-        self.garnish_label = QLabel(self.content_widget)
-        self.garnish_label.setWordWrap(True)
-        self.garnish_label.setStyleSheet(
-            f"color: {COLOR_RECIPE_GARNISH_TEXT}; font-size: {FONT_SIZE_RECIPE_GARNISH}px; border: none;"
-        )
-        self.garnish_label.hide()
-        content_layout.addWidget(self.garnish_label)
 
         content_layout.addStretch(1)
         self.scroll_area.setWidget(self.content_widget)
-        outer_layout.addWidget(self.scroll_area, stretch=1)
 
-    def _make_badge(self, row: QHBoxLayout) -> QLabel:
-        badge = QLabel("", self)
-        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        badge.setStyleSheet(f"""
-            background-color: {COLOR_RECIPE_BADGE_BG};
-            color: {COLOR_RECIPE_TITLE};
-            border-radius: 10px;
-            padding: 4px 8px;
-            font-size: {FONT_SIZE_RECIPE_BADGE}px;
-            font-weight: bold;
-        """)
-        row.addWidget(badge, stretch=1)
-        return badge
+        self.setStyleSheet(self.styleSheet() + build_recipe_stylesheet())
 
-    def show_recipe(self, data: dict) -> None:
-        name = str(data.get("name", RECIPE_POPUP_DEFAULT_TITLE))
-        self.title_label.setText(name[:RECIPE_POPUP_TITLE_MAX_LENGTH].upper())
-
-        self.glass_badge.setText(str(data.get("glass_type", "")).replace("_", " ").upper())
-        self.technique_badge.setText(str(data.get("technique", "")).upper())
-        self.ice_badge.setText(str(data.get("ice", "")).upper())
-
-        self._clear_layout(self.ingredients_layout)
-        for ingredient in data.get("ingredients", []) or []:
-            self.ingredients_layout.addLayout(self._make_ingredient_row(ingredient))
-
-        self._clear_layout(self.steps_layout)
-        for index, step in enumerate(data.get("steps", []) or [], start=1):
-            self.steps_layout.addLayout(self._make_step_row(index, str(step)))
-
-        garnish = data.get("garnish")
-        if garnish:
-            self.garnish_label.setText(f"Garnish: {garnish}")
-            self.garnish_label.show()
-        else:
-            self.garnish_label.hide()
-
+    def show_recipe(self, data: dict[str, Any]) -> None:
+        self._populate(data)
         self._fit_to_content()
-
         self.show()
         self.raise_()
 
-    def _fit_to_content(self) -> None:
-        content_layout = self.content_widget.layout()
+    def shutdown(self) -> None:
+        self.hide()
 
-        target_width = self.scroll_area.viewport().width()
-        if target_width <= 0:
-            target_width = self.content_widget.width()
-
-        if content_layout.hasHeightForWidth():
-            content_height = content_layout.heightForWidth(target_width)
-        else:
-            content_height = self.content_widget.sizeHint().height()
-
-        margins = self.layout().contentsMargins()
-        spacing = self.layout().spacing()
-        chrome_height = (
-            margins.top() + margins.bottom()
-            + self.header_frame.height()
-            + self.badge_row_widget.sizeHint().height()
-            + spacing * 2
+    def _populate(self, data: dict[str, Any]) -> None:
+        self.recipe_title_label.setText(
+            RECIPE_TITLE_HTML.format(text=html.escape(recipe_content.card_title(data)))
         )
 
-        desired_height = chrome_height + content_height
-        new_height = min(max(desired_height, RECIPE_POPUP_MIN_HEIGHT), self._max_popup_height())
-        self.resize(self.width(), new_height)
+        self._clear_layout(self.badge_row)
+        self.badge_row.addStretch(1)
+        for label in recipe_content.badge_labels(data):
+            self.badge_row.addWidget(self._make_badge(label))
+        self.badge_row.addStretch(1)
 
-    def _max_popup_height(self) -> int:
-        parent = self.parentWidget()
-        if parent is None:
-            return RECIPE_POPUP_DEFAULT_HEIGHT
-        return max(RECIPE_POPUP_MIN_HEIGHT, parent.height() - 2 * RECIPE_POPUP_POSITION_OFFSET)
+        ingredients = data.get("ingredients") or []
+        self._rebuild_ingredients(ingredients)
+        self.ingredients_table.setVisible(bool(ingredients))
+        self.ingredients_section_line.setVisible(bool(ingredients))
 
-    def _make_ingredient_row(self, ingredient: dict) -> QHBoxLayout:
-        row = QHBoxLayout()
+        self._clear_layout(self.steps_layout)
+        for index, step in enumerate(data.get("steps") or [], start=1):
+            self.steps_layout.addWidget(self._make_step_row(index, step))
 
-        name_label = QLabel(str(ingredient.get("name", "")))
-        name_label.setStyleSheet(
-            f"color: {COLOR_RECIPE_INGREDIENT_NAME}; font-size: {FONT_SIZE_RECIPE_INGREDIENT}px; border: none;"
-        )
-        row.addWidget(name_label, stretch=1)
+        self.scroll_area.verticalScrollBar().setValue(0)
 
-        value_label = QLabel(str(ingredient.get("display", "")))
-        value_label.setAlignment(Qt.AlignmentFlag.AlignRight)
-        value_label.setStyleSheet(
-            f"color: {COLOR_RECIPE_INGREDIENT_VALUE}; font-size: {FONT_SIZE_RECIPE_INGREDIENT}px; font-weight: bold; border: none;"
-        )
-        row.addWidget(value_label)
-        return row
-
-    def _make_step_row(self, index: int, instruction: str) -> QHBoxLayout:
-        row = QHBoxLayout()
-        row.setSpacing(8)
-
-        badge = QLabel(str(index))
-        badge.setFixedSize(RECIPE_POPUP_STEP_BADGE_SIZE, RECIPE_POPUP_STEP_BADGE_SIZE)
+    def _make_badge(self, text: str) -> QLabel:
+        badge = QLabel(text)
+        badge.setObjectName(OBJECT_NAME_RECIPE_BADGE)
+        badge.setFixedHeight(RECIPE_CARD_BADGE_HEIGHT)
         badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        badge.setStyleSheet(f"""
-            background-color: {COLOR_RECIPE_STEP_BADGE_BG};
-            color: white;
-            font-weight: bold;
-            font-size: {FONT_SIZE_RECIPE_STEP_BADGE}px;
-            border-radius: {RECIPE_POPUP_STEP_BADGE_SIZE // 2}px;
-        """)
-        row.addWidget(badge, alignment=Qt.AlignmentFlag.AlignTop)
+        return badge
 
-        text_label = QLabel(instruction)
-        text_label.setWordWrap(True)
-        text_label.setStyleSheet(
-            f"color: {COLOR_RECIPE_STEP_TEXT}; font-size: {FONT_SIZE_RECIPE_STEP}px; border: none;"
+    def _rebuild_ingredients(self, ingredients: list[dict[str, Any]]) -> None:
+        self._clear_layout(self.ingredients_layout)
+
+        for index, ingredient in enumerate(ingredients):
+            row = index * 2
+            if index:
+                self.ingredients_layout.addWidget(
+                    self._make_divider(), row - 1, _INGREDIENT_COLUMN_PIP, 1, _INGREDIENT_COLUMN_SPAN
+                )
+
+            pip = QLabel(self.ingredients_table)
+            pip.setFixedSize(RECIPE_CARD_PIP_SIZE, RECIPE_CARD_PIP_SIZE)
+            pip.setStyleSheet(build_pip_style(recipe_content.pip_color(ingredient)))
+            self.ingredients_layout.addWidget(
+                pip, row, _INGREDIENT_COLUMN_PIP, Qt.AlignmentFlag.AlignVCenter
+            )
+
+            name_label = QLabel(str(ingredient.get("name", "")), self.ingredients_table)
+            name_label.setObjectName(OBJECT_NAME_RECIPE_INGREDIENT_NAME)
+            self.ingredients_layout.addWidget(name_label, row, _INGREDIENT_COLUMN_NAME)
+
+            amount_label = QLabel(recipe_content.amount_label(ingredient), self.ingredients_table)
+            amount_label.setObjectName(
+                OBJECT_NAME_RECIPE_AMOUNT_TOP_UP
+                if recipe_content.is_top_up(ingredient)
+                else OBJECT_NAME_RECIPE_AMOUNT
+            )
+            self.ingredients_layout.addWidget(
+                amount_label, row, _INGREDIENT_COLUMN_AMOUNT,
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+            )
+
+    def _make_divider(self) -> QFrame:
+        divider = QFrame()
+        divider.setObjectName(OBJECT_NAME_RECIPE_DIVIDER)
+        divider.setFixedHeight(RECIPE_CARD_DIVIDER_HEIGHT)
+        return divider
+
+    def _make_section_line(self) -> QFrame:
+        line = QFrame(self.content_widget)
+        line.setObjectName(OBJECT_NAME_RECIPE_SECTION_LINE)
+        line.setFixedHeight(RECIPE_CARD_SECTION_LINE_HEIGHT)
+        return line
+
+    def _make_step_row(self, index: int, step: dict[str, Any]) -> QWidget:
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(RECIPE_CARD_STEP_COLUMN_SPACING)
+
+        number_label = QLabel(recipe_content.step_number(index), row)
+        number_label.setObjectName(OBJECT_NAME_RECIPE_STEP_NUMBER)
+        number_label.setFixedWidth(RECIPE_CARD_STEP_NUMBER_WIDTH)
+        layout.addWidget(number_label, 0, Qt.AlignmentFlag.AlignTop)
+
+        instruction_label = QLabel(row)
+        instruction_label.setObjectName(OBJECT_NAME_RECIPE_STEP_BODY)
+        instruction_label.setTextFormat(Qt.TextFormat.RichText)
+        instruction_label.setWordWrap(True)
+        instruction_label.setText(
+            RECIPE_STEP_BODY_HTML.format(
+                percent=RECIPE_STEP_LINE_HEIGHT_PERCENT,
+                text=html.escape(recipe_content.instruction_text(step)),
+            )
         )
-        row.addWidget(text_label, stretch=1)
+        layout.addWidget(instruction_label, 1)
+
         return row
 
     def _clear_layout(self, layout: QLayout) -> None:
@@ -245,67 +221,55 @@ class TopRightRecipyWidget(QFrame):
             child_widget = item.widget()
             child_layout = item.layout()
             if child_widget is not None:
+                child_widget.setParent(None)
                 child_widget.deleteLater()
             elif child_layout is not None:
                 self._clear_layout(child_layout)
 
-    def shutdown(self) -> None:
-        self.hide()
+    def _fit_to_content(self) -> None:
+        chrome_height = self._chrome_height()
+        max_height = self._max_popup_height()
+        content_width = self._content_width()
 
-    def _get_resize_edges(self, pos: QPoint) -> dict[str, bool]:
-        rect = self.rect()
-        m = RECIPE_POPUP_BORDER_MARGIN
-        return {
-            "left": pos.x() <= m,
-            "bottom": pos.y() >= rect.height() - m,
-        }
+        desired_height = chrome_height + self._content_height(content_width)
 
-    def _update_cursor_shape(self, edges: dict[str, bool]) -> None:
-        bottom, left = edges["bottom"], edges["left"]
-        if bottom and left:
-            self.setCursor(QCursor(Qt.CursorShape.SizeBDiagCursor))
-        elif left:
-            self.setCursor(QCursor(Qt.CursorShape.SizeHorCursor))
-        elif bottom:
-            self.setCursor(QCursor(Qt.CursorShape.SizeVerCursor))
-        else:
-            self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
+        if desired_height > max_height:
+            desired_height = chrome_height + self._content_height(content_width - SCROLLBAR_WIDTH)
 
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            edges = self._get_resize_edges(event.pos())
-            if any(edges.values()):
-                self._resizing = True
-                self._resize_edges = edges
-                self._press_pos = event.globalPosition().toPoint()
-                self._press_geom = self.geometry()
-                event.accept()
-                return
-        super().mousePressEvent(event)
+        new_height = min(max(desired_height, RECIPE_POPUP_MIN_HEIGHT), max_height)
+        self.resize(self.width(), new_height)
 
-    def mouseMoveEvent(self, event):
-        if self._resizing:
-            delta = event.globalPosition().toPoint() - self._press_pos
-            geom = self._press_geom
-            new_x = geom.x()
-            new_w = geom.width()
-            new_h = geom.height()
+    def _chrome_height(self) -> int:
+        margins = self.layout().contentsMargins()
+        return (
+            margins.top() + margins.bottom()
+            + self.header_frame.height()
+            + self.layout().spacing()
+        )
 
-            if self._resize_edges["left"]:
-                new_w = max(RECIPE_POPUP_MIN_WIDTH, geom.width() - delta.x())
-                new_x = geom.x() + (geom.width() - new_w)
-            if self._resize_edges["bottom"]:
-                new_h = max(RECIPE_POPUP_MIN_HEIGHT, geom.height() + delta.y())
+    def _content_width(self) -> int:
+        width = self.scroll_area.viewport().width()
+        if width <= 0:
+            width = self.content_widget.width()
+        return width
 
-            self.setGeometry(new_x, geom.y(), new_w, new_h)
-            event.accept()
-            return
+    def _content_height(self, width: int) -> int:
+        content_layout = self.content_widget.layout()
+        if width > 0 and content_layout.hasHeightForWidth():
+            return content_layout.heightForWidth(width)
+        return self.content_widget.sizeHint().height()
 
-        edges = self._get_resize_edges(event.pos())
-        self._update_cursor_shape(edges)
-        super().mouseMoveEvent(event)
+    def _max_popup_height(self) -> int:
+        limits = []
 
-    def mouseReleaseEvent(self, event):
-        self._resizing = False
-        self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
-        super().mouseReleaseEvent(event)
+        screen = self.screen() or QGuiApplication.primaryScreen()
+        if screen is not None:
+            limits.append(int(screen.availableGeometry().height() * RECIPE_POPUP_MAX_SCREEN_RATIO))
+
+        parent = self.parentWidget()
+        if parent is not None:
+            limits.append(parent.height() - 2 * HUD_POSITION_OFFSET)
+
+        if not limits:
+            return RECIPE_POPUP_DEFAULT_HEIGHT
+        return max(RECIPE_POPUP_MIN_HEIGHT, min(limits))

@@ -1,0 +1,74 @@
+RECIPE_POPUP_DEFAULT_WIDTH: int = 380
+RECIPE_POPUP_DEFAULT_HEIGHT: int = 420
+RECIPE_POPUP_MIN_WIDTH: int = 300
+RECIPE_POPUP_MIN_HEIGHT: int = 200
+RECIPE_POPUP_MAX_SCREEN_RATIO: float = 0.5
+
+RECIPE_CARD_SECTION_GAP: int = 14
+RECIPE_CARD_TITLE_SPACING: int = 8
+RECIPE_CARD_BADGE_SPACING: int = 6
+RECIPE_CARD_TABLE_PADDING_H: int = 12
+RECIPE_CARD_TABLE_PADDING_V: int = 10
+RECIPE_CARD_TABLE_COLUMN_SPACING: int = 10
+RECIPE_CARD_TABLE_ROW_SPACING: int = 7
+RECIPE_CARD_STEP_SPACING: int = 9
+RECIPE_CARD_STEP_NUMBER_WIDTH: int = 26
+RECIPE_CARD_STEP_COLUMN_SPACING: int = 10
+
+RECIPE_CARD_TABLE_RADIUS: int = 6
+RECIPE_CARD_BADGE_HEIGHT: int = 22
+RECIPE_CARD_DIVIDER_HEIGHT: int = 1
+RECIPE_CARD_SECTION_LINE_HEIGHT: int = 1
+RECIPE_CARD_PIP_SIZE: int = 10
+
+RECIPE_CARD_BADGE_PADDING_H: int = 12
+
+COLOR_RECIPE_TABLE_BG: str = "#141a26"
+COLOR_RECIPE_DIVIDER: str = "rgba(255, 255, 255, 6%)"
+COLOR_RECIPE_BADGE_BG: str = "#0067C0"
+COLOR_RECIPE_BADGE_TEXT: str = "#FFFFFF"
+
+FONT_SIZE_RECIPE_TITLE: int = 24
+FONT_SIZE_RECIPE_INGREDIENT: int = 14
+FONT_SIZE_RECIPE_STEP_BODY: int = 13
+FONT_SIZE_RECIPE_STEP_NUMBER: int = 13
+FONT_SIZE_RECIPE_BADGE: int = 11
+
+RECIPE_STEP_LINE_HEIGHT_PERCENT: int = 135
+RECIPE_STEP_BODY_HTML: str = '<div style="line-height: {percent}%;">{text}</div>'
+RECIPE_TITLE_HTML: str = "<b>{text}</b>"
+RECIPE_DURATION_PATTERN: str = (
+    r"[\s,]*\bfor\s+(?:about\s+|around\s+|roughly\s+)?"
+    r"\d+(?:\s*[-–]\s*\d+)?\s*(?:seconds?|secs?|s)\b"
+)
+
+OBJECT_NAME_RECIPE_WIDGET: str = "TopRightRecipyWidget"
+OBJECT_NAME_RECIPE_TITLE: str = "recipeTitle"
+OBJECT_NAME_RECIPE_BADGE: str = "recipeBadge"
+OBJECT_NAME_RECIPE_TABLE: str = "recipeTable"
+OBJECT_NAME_RECIPE_DIVIDER: str = "recipeDivider"
+OBJECT_NAME_RECIPE_SECTION_LINE: str = "recipeSectionLine"
+OBJECT_NAME_RECIPE_INGREDIENT_NAME: str = "recipeIngredientName"
+OBJECT_NAME_RECIPE_AMOUNT: str = "recipeAmount"
+OBJECT_NAME_RECIPE_AMOUNT_TOP_UP: str = "recipeAmountTopUp"
+OBJECT_NAME_RECIPE_STEP_NUMBER: str = "recipeStepNumber"
+OBJECT_NAME_RECIPE_STEP_BODY: str = "recipeStepBody"
+OBJECT_NAME_RECIPE_SCROLL: str = "recipeScroll"
+
+RECIPE_CARD_DEFAULT_TITLE: str = "Recipe"
+
+RECIPE_GLASS_LABELS: dict[str, str] = {
+    "rocks": "Rocks Glass",
+    "coupe": "Coupe Glass",
+    "highball": "Highball Glass",
+    "martini": "Martini Glass",
+    "nick_and_nora": "Nick & Nora Glass",
+}
+RECIPE_GLASS_LABEL_SUFFIX: str = "Glass"
+RECIPE_METHOD_BUILT: str = "Built in Glass"
+RECIPE_METHOD_SHAKER: str = "Shaker"
+RECIPE_METHOD_MIXING_GLASS: str = "Mixing Glass"
+RECIPE_FOAM_LABEL: str = "Emulsion Foam"
+
+RECIPE_TOP_UP_LABEL: str = "Top the cocktail"
+RECIPE_STEP_NUMBER_FORMAT: str = "{index:02d}"

@@ -1,27 +1,18 @@
-from PyQt6.QtCore import QEvent, QObject, QPoint, QRect, Qt, pyqtSignal
+from PyQt6.QtCore import QPoint, QRect, Qt, pyqtSignal
 from PyQt6.QtGui import QCursor
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 from app.config import (
-    COLOR_CLOSE_BUTTON_BG, COLOR_CLOSE_BUTTON_HOVER_BG, COLOR_CLOSE_BUTTON_TEXT,
-    COLOR_PANEL_ACTION_BG, COLOR_PANEL_ACTION_DISABLED_TEXT, COLOR_PANEL_ACTION_HOVER_BG,
-    COLOR_PANEL_ACTION_TEXT, COLOR_VIDEO_BG, COLOR_VIDEO_BORDER,
-    COLOR_VIDEO_TITLE, FONT_SIZE_CLOSE_BUTTON, FONT_SIZE_VIDEO_TITLE,
-    PANEL_ACTION_BUTTON_HEIGHT, PANEL_ACTION_BUTTON_PADDING_H, PANEL_ACTION_BUTTON_RADIUS,
-    PANEL_BODY_MARGIN, PANEL_BORDER_MARGIN, PANEL_BORDER_RADIUS,
-    PANEL_BORDER_WIDTH, PANEL_CLOSE_BUTTON_RADIUS, PANEL_CLOSE_BUTTON_SIZE,
-    PANEL_CLOSE_GLYPH, PANEL_HEADER_HEIGHT, PANEL_HEADER_SPACING,
-    PANEL_TITLE_MAX_LENGTH,
+    COLOR_ACCENT, COLOR_CLOSE_BUTTON_BG, COLOR_CLOSE_BUTTON_HOVER_BG,
+    COLOR_CLOSE_BUTTON_TEXT, COLOR_PANEL_ACTION_BG, COLOR_PANEL_ACTION_DISABLED_TEXT,
+    COLOR_PANEL_ACTION_HOVER_BG, COLOR_PANEL_ACTION_TEXT, COLOR_VIDEO_BG,
+    FONT_SIZE_CLOSE_BUTTON, FONT_SIZE_VIDEO_TITLE, PANEL_ACTION_BUTTON_HEIGHT,
+    PANEL_ACTION_BUTTON_PADDING_H, PANEL_ACTION_BUTTON_RADIUS, PANEL_BODY_MARGIN,
+    PANEL_BORDER_MARGIN, PANEL_BORDER_RADIUS, PANEL_BORDER_WIDTH,
+    PANEL_CLOSE_BUTTON_RADIUS, PANEL_CLOSE_BUTTON_SIZE, PANEL_CLOSE_GLYPH,
+    PANEL_HEADER_HEIGHT, PANEL_HEADER_SPACING, PANEL_RESIZE_SIDE_LEFT,
+    PANEL_RESIZE_SIDE_RIGHT, PANEL_TITLE_MAX_LENGTH,
 )
-
-
-class HeaderDragFilter(QObject):
-    def __init__(self, panel) -> None:
-        super().__init__(panel)
-        self._panel = panel
-
-    def eventFilter(self, watched, event):
-        return self._panel.handle_header_event(event)
 
 
 class FloatingPanel(QFrame):
@@ -35,16 +26,18 @@ class FloatingPanel(QFrame):
         min_width: int = 260,
         min_height: int = 160,
         object_name: str = "floatingPanel",
-        border_color: str = COLOR_VIDEO_BORDER,
+        border_color: str = COLOR_ACCENT,
         background: str = COLOR_VIDEO_BG,
-        title_color: str = COLOR_VIDEO_TITLE,
+        title_color: str = COLOR_ACCENT,
         title: str = "",
+        resize_side: str = PANEL_RESIZE_SIDE_RIGHT,
     ) -> None:
         super().__init__(parent)
 
         self._min_width = min_width
         self._min_height = min_height
         self._title_color = title_color
+        self._resize_side = resize_side
 
         self.setObjectName(object_name)
         self.setMinimumSize(min_width, min_height)
@@ -59,8 +52,7 @@ class FloatingPanel(QFrame):
         """)
 
         self._resizing = False
-        self._moving = False
-        self._resize_edges = {"right": False, "bottom": False}
+        self._resize_edges = {"horizontal": False, "bottom": False}
         self._press_pos = QPoint()
         self._press_geom = QRect()
 
@@ -75,15 +67,11 @@ class FloatingPanel(QFrame):
         self.header_frame.setStyleSheet("background: transparent; border: none;")
         self.header_frame.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
 
-        self._header_filter = HeaderDragFilter(self)
-        self.header_frame.installEventFilter(self._header_filter)
-
         header_layout = QHBoxLayout(self.header_frame)
         header_layout.setContentsMargins(4, 0, 4, 0)
         header_layout.setSpacing(PANEL_HEADER_SPACING)
 
         self.title_label = QLabel(title, self.header_frame)
-        self.title_label.installEventFilter(self._header_filter)
         self.title_label.setStyleSheet(
             f"color: {title_color}; font-weight: bold; font-size: {FONT_SIZE_VIDEO_TITLE}px; border: none;"
         )
@@ -141,63 +129,37 @@ class FloatingPanel(QFrame):
         self.title_label.setText(str(text)[:PANEL_TITLE_MAX_LENGTH].upper())
 
     def close_panel(self) -> None:
-        self._moving = False
         self._resizing = False
         self.hide()
         self.panel_closed.emit()
 
-    def handle_header_event(self, event) -> bool:
-        kind = event.type()
-
-        if kind == QEvent.Type.MouseButtonPress:
-            if event.button() != Qt.MouseButton.LeftButton:
-                return False
-            self._begin_move(event.globalPosition().toPoint())
-            return True
-
-        if kind == QEvent.Type.MouseMove and self._moving:
-            self._continue_move(event.globalPosition().toPoint())
-            return True
-
-        if kind == QEvent.Type.MouseButtonRelease and self._moving:
-            self._end_drag()
-            return True
-
-        return False
-
-    def _begin_move(self, global_pos: QPoint) -> None:
-        self._moving = True
-        self._resizing = False
-        self._press_pos = global_pos
-        self._press_geom = self.geometry()
-        self.setCursor(QCursor(Qt.CursorShape.SizeAllCursor))
-
-    def _continue_move(self, global_pos: QPoint) -> None:
-        self.move(self._press_geom.topLeft() + (global_pos - self._press_pos))
-
-    def _end_drag(self) -> None:
-        self._moving = False
-        self._resizing = False
-        self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
-
     def _get_resize_edges(self, pos: QPoint) -> dict:
         rect = self.rect()
         margin = PANEL_BORDER_MARGIN
+        if self._resize_side == PANEL_RESIZE_SIDE_LEFT:
+            horizontal = pos.x() <= margin
+        else:
+            horizontal = pos.x() >= rect.width() - margin
         return {
-            "right": pos.x() >= rect.width() - margin,
+            "horizontal": horizontal,
             "bottom": pos.y() >= rect.height() - margin,
         }
 
     def _update_cursor_shape(self, edges: dict) -> None:
-        bottom, right = edges["bottom"], edges["right"]
-        if bottom and right:
-            self.setCursor(QCursor(Qt.CursorShape.SizeFDiagCursor))
-        elif right:
-            self.setCursor(QCursor(Qt.CursorShape.SizeHorCursor))
+        bottom, horizontal = edges["bottom"], edges["horizontal"]
+        if bottom and horizontal:
+            shape = (
+                Qt.CursorShape.SizeBDiagCursor
+                if self._resize_side == PANEL_RESIZE_SIDE_LEFT
+                else Qt.CursorShape.SizeFDiagCursor
+            )
+        elif horizontal:
+            shape = Qt.CursorShape.SizeHorCursor
         elif bottom:
-            self.setCursor(QCursor(Qt.CursorShape.SizeVerCursor))
+            shape = Qt.CursorShape.SizeVerCursor
         else:
-            self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
+            shape = Qt.CursorShape.ArrowCursor
+        self.setCursor(QCursor(shape))
 
     def mousePressEvent(self, event) -> None:
         if event.button() != Qt.MouseButton.LeftButton:
@@ -208,15 +170,9 @@ class FloatingPanel(QFrame):
 
         if any(edges.values()):
             self._resizing = True
-            self._moving = False
             self._resize_edges = edges
             self._press_pos = event.globalPosition().toPoint()
             self._press_geom = self.geometry()
-            event.accept()
-            return
-
-        if event.pos().y() <= PANEL_BODY_MARGIN:
-            self._begin_move(event.globalPosition().toPoint())
             event.accept()
             return
 
@@ -226,18 +182,21 @@ class FloatingPanel(QFrame):
     def mouseMoveEvent(self, event) -> None:
         if self._resizing:
             delta = event.globalPosition().toPoint() - self._press_pos
-            new_w = self._press_geom.width()
-            new_h = self._press_geom.height()
-            if self._resize_edges["right"]:
-                new_w = max(self._min_width, new_w + delta.x())
-            if self._resize_edges["bottom"]:
-                new_h = max(self._min_height, new_h + delta.y())
-            self.resize(new_w, new_h)
-            event.accept()
-            return
+            geom = self._press_geom
+            new_x = geom.x()
+            new_w = geom.width()
+            new_h = geom.height()
 
-        if self._moving:
-            self._continue_move(event.globalPosition().toPoint())
+            if self._resize_edges["horizontal"]:
+                if self._resize_side == PANEL_RESIZE_SIDE_LEFT:
+                    new_w = max(self._min_width, geom.width() - delta.x())
+                    new_x = geom.x() + (geom.width() - new_w)
+                else:
+                    new_w = max(self._min_width, geom.width() + delta.x())
+            if self._resize_edges["bottom"]:
+                new_h = max(self._min_height, geom.height() + delta.y())
+
+            self.setGeometry(new_x, geom.y(), new_w, new_h)
             event.accept()
             return
 
@@ -245,7 +204,8 @@ class FloatingPanel(QFrame):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event) -> None:
-        self._end_drag()
+        self._resizing = False
+        self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
         super().mouseReleaseEvent(event)
 
     def on_body_clicked(self) -> None:

@@ -7,10 +7,10 @@ from app.config import (
     APP_NAME, CANVAS_POPUP_DEFAULT_HEIGHT, CANVAS_POPUP_DEFAULT_WIDTH,
     FULLSCREEN_SHORTCUT_ESC, FULLSCREEN_SHORTCUT_F11, LOG_PREFIX_VOICE,
     MIC_BUTTON_LISTENING_TEXT, MIC_BUTTON_MUTED_TEXT, ORG_NAME,
-    RECIPE_POPUP_DEFAULT_HEIGHT, RECIPE_POPUP_DEFAULT_WIDTH, RECIPE_POPUP_POSITION_OFFSET,
+    RECIPE_POPUP_DEFAULT_HEIGHT, RECIPE_POPUP_DEFAULT_WIDTH, HUD_POSITION_OFFSET ,
     SETTINGS_SPLITTER_STATE_KEY, SPLITTER_DEFAULT_CANVAS_RATIO, SPLITTER_DEFAULT_CHAT_RATIO,
     SPLITTER_HANDLE_WIDTH, SPLITTER_STRETCH_CANVAS, SPLITTER_STRETCH_CHAT,
-    VIDEO_PREVIEW_DEFAULT_HEIGHT, VIDEO_PREVIEW_DEFAULT_WIDTH, VIDEO_PREVIEW_POSITION_OFFSET,
+    VIDEO_PREVIEW_DEFAULT_HEIGHT, VIDEO_PREVIEW_DEFAULT_WIDTH,
     VOICE_MSG_NO_COMMAND_HEARD, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH,
     WINDOW_TITLE,
 )
@@ -96,14 +96,14 @@ class MainWindow(QMainWindow):
         self.recipe_widget.hide()
 
         self._hud_ready = True
-        self._reset_hud_positions()
+        self._reposition_hud_widgets()
         self._raise_hud_widgets()
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         if self._placement is not None:
             self._placement.schedule_save()
-        self._reposition_recipe_widget()
+        self._reposition_hud_widgets()
         self._raise_hud_widgets()
 
     def moveEvent(self, event: QMoveEvent) -> None:
@@ -117,21 +117,20 @@ class MainWindow(QMainWindow):
             self._placement.schedule_save()
 
     def _on_splitter_moved(self, pos: int, index: int) -> None:
-        self._reposition_recipe_widget()
+        self._reposition_hud_widgets()
         self._raise_hud_widgets()
 
-    def _reset_hud_positions(self) -> None:
-        corner = QPoint(VIDEO_PREVIEW_POSITION_OFFSET, VIDEO_PREVIEW_POSITION_OFFSET)
-        self.video_preview.move(corner)
-        self.cocktail_popup.move(corner)
-        self._reposition_recipe_widget()
-
-    def _reposition_recipe_widget(self) -> None:
+    def _reposition_hud_widgets(self) -> None:
         if not self._hud_ready:
             return
-        x_in_canvas = self.canvas_panel.width() - self.recipe_widget.width() - RECIPE_POPUP_POSITION_OFFSET
-        top_right = self.canvas_panel.mapTo(self, QPoint(x_in_canvas, RECIPE_POPUP_POSITION_OFFSET))
-        self.recipe_widget.move(top_right)
+
+        canvas = self.canvas_panel
+        top_left = canvas.mapTo(self, QPoint(HUD_POSITION_OFFSET, HUD_POSITION_OFFSET))
+        self.video_preview.move(top_left)
+        self.cocktail_popup.move(top_left)
+
+        recipe_x = canvas.width() - self.recipe_widget.width() - HUD_POSITION_OFFSET
+        self.recipe_widget.move(canvas.mapTo(self, QPoint(recipe_x, HUD_POSITION_OFFSET)))
 
     def _raise_hud_widgets(self) -> None:
         if not self._hud_ready:
@@ -146,7 +145,7 @@ class MainWindow(QMainWindow):
 
     def _on_escape_pressed(self) -> None:
         if self.recipe_widget.isVisible():
-            self.recipe_widget.hide()
+            self.recipe_widget.close_panel()
             return
         if self.cocktail_popup.isVisible():
             self.cocktail_popup.close_panel()
@@ -289,7 +288,7 @@ class MainWindow(QMainWindow):
 
     def _on_recipe_ready(self, data: dict):
         self.recipe_widget.show_recipe(data)
-        self._reposition_recipe_widget()
+        self._reposition_hud_widgets()
         self._raise_hud_widgets()
 
     def _on_speaking_started(self):

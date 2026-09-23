@@ -3,7 +3,7 @@ from PyQt6.QtCore import pyqtSignal
 from app.config import (
     CANVAS_POPUP_DEFAULT_HEIGHT, CANVAS_POPUP_DEFAULT_TITLE, CANVAS_POPUP_DEFAULT_WIDTH,
     CANVAS_POPUP_EXPORTING_TEXT, CANVAS_POPUP_EXPORT_TEXT, CANVAS_POPUP_MIN_HEIGHT,
-    CANVAS_POPUP_MIN_WIDTH, COLOR_CANVAS_POPUP_BORDER, OBJECT_NAME_CANVAS_POPUP,
+    CANVAS_POPUP_MIN_WIDTH, OBJECT_NAME_CANVAS_POPUP,
 )
 from app.widgets.cocktail_canvas import CocktailCanvas
 from app.widgets.floating_panel import FloatingPanel
@@ -25,8 +25,6 @@ class CocktailCanvasPopup(FloatingPanel):
             min_width=CANVAS_POPUP_MIN_WIDTH,
             min_height=CANVAS_POPUP_MIN_HEIGHT,
             object_name=OBJECT_NAME_CANVAS_POPUP,
-            border_color=COLOR_CANVAS_POPUP_BORDER,
-            title_color=COLOR_CANVAS_POPUP_BORDER,
             title=CANVAS_POPUP_DEFAULT_TITLE,
         )
 

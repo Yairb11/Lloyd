@@ -102,8 +102,8 @@ TOOL_FAILURES: str = (
     "\n"
     "If a tool result comes back as an error, say plainly in your next spoken "
     "sentence that something went wrong and briefly what it said. If "
-    "render_animation reports a schema problem, fix the spec and call it exactly "
-    "once more."
+    "render_animation or show_recipe reports a schema problem, fix the spec and "
+    "call it exactly once more."
 )
 
 
