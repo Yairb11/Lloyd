@@ -2,15 +2,14 @@ import json
 from pathlib import Path
 
 from app.config import (
-    LOG_PREFIX_ERROR, LOG_PREFIX_VOICE, TTS_EDGE_DEFAULT_PITCH,
-    TTS_EDGE_DEFAULT_RATE, TTS_EDGE_DEFAULT_VOICE, TTS_EDGE_VOICES,
-    TTS_ENGINE_EDGE, TTS_ENGINE_PIPER, TTS_PIPER_DEFAULT_LENGTH_SCALE,
-    TTS_PIPER_DEFAULT_NOISE_SCALE, TTS_PIPER_DEFAULT_NOISE_W,
-    TTS_PIPER_FALLBACK_SAMPLE_RATE, TTS_VOICE_ALIASES, TTS_VOICE_CONFIG_SUFFIX,
-    TTS_VOICE_DEFAULT_LENGTH_MULTIPLIER, TTS_VOICE_DEFAULT_NOISE_MULTIPLIER,
-    TTS_VOICE_DEFAULT_NOISE_W_MULTIPLIER, TTS_VOICE_DEFAULT_VOLUME,
-    TTS_VOICE_FALLBACK_ID, TTS_VOICE_ID, TTS_VOICE_MODEL_EXTENSION,
-    TTS_VOICE_TUNING, TTS_VOICES_DIR,
+    LOG_PREFIX_ERROR, LOG_PREFIX_VOICE, TTS_EDGE_PITCH,
+    TTS_EDGE_RATE, TTS_EDGE_VOICE, TTS_ENGINE_EDGE,
+    TTS_ENGINE_PIPER, TTS_PIPER_DEFAULT_LENGTH_SCALE, TTS_PIPER_DEFAULT_NOISE_SCALE,
+    TTS_PIPER_DEFAULT_NOISE_W, TTS_PIPER_FALLBACK_SAMPLE_RATE, TTS_VOICE_CONFIG_SUFFIX,
+    TTS_VOICE_DEFAULT_ID, TTS_VOICE_DEFAULT_MODEL, TTS_VOICE_DEFAULT_VOLUME,
+    TTS_VOICE_ID, TTS_VOICE_LENGTH_MULTIPLIER, TTS_VOICE_MODEL_EXTENSION,
+    TTS_VOICE_NEUTRAL_MULTIPLIER, TTS_VOICE_NOISE_MULTIPLIER, TTS_VOICE_NOISE_W_MULTIPLIER,
+    TTS_VOICE_SPEAKER, TTS_VOICE_VOLUME, TTS_VOICES_DIR,
 )
 from app.core.paths import PROJECT_ROOT
 
@@ -31,9 +30,9 @@ class VoiceSpec:
         num_speakers: int = 1,
         language: str = "",
         quality: str = "",
-        edge_voice: str = TTS_EDGE_DEFAULT_VOICE,
-        edge_rate: str = TTS_EDGE_DEFAULT_RATE,
-        edge_pitch: str = TTS_EDGE_DEFAULT_PITCH,
+        edge_voice: str = TTS_EDGE_VOICE,
+        edge_rate: str = TTS_EDGE_RATE,
+        edge_pitch: str = TTS_EDGE_PITCH,
     ) -> None:
         self.voice_id = voice_id
         self.engine = engine
@@ -99,20 +98,18 @@ def discover_voice_files() -> dict[str, Path]:
 
 
 def build_catalog() -> VoiceCatalog:
-    aliases_by_stem = _aliases_by_stem()
     voices: dict[str, VoiceSpec] = {}
 
     for stem, model_path in discover_voice_files().items():
-        voice_id = aliases_by_stem.get(stem, stem)
+        voice_id = TTS_VOICE_DEFAULT_ID if stem == TTS_VOICE_DEFAULT_MODEL else stem
         spec = _piper_spec(voice_id, stem, model_path)
         if spec is None:
             continue
         voices[voice_id] = spec
         voices[stem] = spec
 
-    for voice_id, entry in TTS_EDGE_VOICES.items():
-        if voice_id not in voices:
-            voices[voice_id] = _edge_spec(voice_id, entry)
+    if TTS_ENGINE_EDGE not in voices:
+        voices[TTS_ENGINE_EDGE] = edge_fallback_voice()
 
     return VoiceCatalog(voices, voices_dir())
 
@@ -152,7 +149,13 @@ def resolve_voice(voice_id: str | None = None) -> VoiceSpec:
 
 
 def edge_fallback_voice() -> VoiceSpec:
-    return _edge_spec(TTS_ENGINE_EDGE, {})
+    return VoiceSpec(
+        voice_id=TTS_ENGINE_EDGE,
+        engine=TTS_ENGINE_EDGE,
+        edge_voice=TTS_EDGE_VOICE,
+        edge_rate=TTS_EDGE_RATE,
+        edge_pitch=TTS_EDGE_PITCH,
+    )
 
 
 def describe_voice(voice: VoiceSpec) -> str:
@@ -168,18 +171,9 @@ def describe_voice(voice: VoiceSpec) -> str:
     return f"{voice.voice_id} [{TTS_ENGINE_PIPER}: {name}, {', '.join(details)}]"
 
 
-def _aliases_by_stem() -> dict[str, str]:
-    mapping: dict[str, str] = {}
-    for alias in sorted(TTS_VOICE_ALIASES):
-        stem = TTS_VOICE_ALIASES[alias]
-        if stem not in mapping:
-            mapping[stem] = alias
-    return mapping
-
-
 def _candidate_ids(requested: str, catalog: VoiceCatalog):
     seen: set[str] = set()
-    ordered = (requested, TTS_VOICE_FALLBACK_ID, *catalog.piper_ids(), *TTS_EDGE_VOICES)
+    ordered = (requested, TTS_VOICE_DEFAULT_ID, *catalog.piper_ids(), TTS_ENGINE_EDGE)
     for candidate in ordered:
         if candidate and candidate not in seen:
             seen.add(candidate)
@@ -196,33 +190,34 @@ def _piper_spec(voice_id: str, stem: str, model_path: Path) -> VoiceSpec | None:
         return None
 
     metadata = _read_metadata(config_path)
-    tuning = TTS_VOICE_TUNING.get(stem, {})
+    selected = TTS_VOICE_ID in (voice_id, stem)
 
-    length = metadata["length_scale"] * tuning.get(
-        "length_multiplier", TTS_VOICE_DEFAULT_LENGTH_MULTIPLIER
-    )
-    noise = metadata["noise_scale"] * tuning.get(
-        "noise_multiplier", TTS_VOICE_DEFAULT_NOISE_MULTIPLIER
-    )
-    noise_w = metadata["noise_w"] * tuning.get(
-        "noise_w_multiplier", TTS_VOICE_DEFAULT_NOISE_W_MULTIPLIER
-    )
+    length = metadata["length_scale"] * _multiplier(selected, TTS_VOICE_LENGTH_MULTIPLIER)
+    noise = metadata["noise_scale"] * _multiplier(selected, TTS_VOICE_NOISE_MULTIPLIER)
+    noise_w = metadata["noise_w"] * _multiplier(selected, TTS_VOICE_NOISE_W_MULTIPLIER)
+    volume = TTS_VOICE_VOLUME if selected else TTS_VOICE_DEFAULT_VOLUME
 
     return VoiceSpec(
         voice_id=voice_id,
         engine=TTS_ENGINE_PIPER,
         model_path=model_path,
         config_path=config_path,
-        speaker_id=_speaker_id(stem, tuning, metadata["num_speakers"]),
+        speaker_id=_speaker_id(stem, selected, metadata["num_speakers"]),
         length_scale=length,
         noise_scale=noise,
         noise_w_scale=noise_w,
-        volume=tuning.get("volume", TTS_VOICE_DEFAULT_VOLUME),
+        volume=volume,
         sample_rate=metadata["sample_rate"],
         num_speakers=metadata["num_speakers"],
         language=metadata["language"],
         quality=metadata["quality"],
     )
+
+
+def _multiplier(selected: bool, value: float) -> float:
+    if selected:
+        return value
+    return TTS_VOICE_NEUTRAL_MULTIPLIER
 
 
 def _read_metadata(config_path: Path) -> dict:
@@ -247,11 +242,11 @@ def _read_metadata(config_path: Path) -> dict:
     }
 
 
-def _speaker_id(stem: str, tuning: dict, num_speakers: int) -> int | None:
+def _speaker_id(stem: str, selected: bool, num_speakers: int) -> int | None:
     if num_speakers < 2:
         return None
 
-    speaker = tuning.get("speaker")
+    speaker = TTS_VOICE_SPEAKER if selected else None
     if speaker is None:
         return 0
 
@@ -263,13 +258,3 @@ def _speaker_id(stem: str, tuning: dict, num_speakers: int) -> int | None:
         f"speaker {speaker} is out of range, using 0"
     )
     return 0
-
-
-def _edge_spec(voice_id: str, entry: dict) -> VoiceSpec:
-    return VoiceSpec(
-        voice_id=voice_id,
-        engine=TTS_ENGINE_EDGE,
-        edge_voice=entry.get("voice", TTS_EDGE_DEFAULT_VOICE),
-        edge_rate=entry.get("rate", TTS_EDGE_DEFAULT_RATE),
-        edge_pitch=entry.get("pitch", TTS_EDGE_DEFAULT_PITCH),
-    )

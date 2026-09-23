@@ -1,4 +1,9 @@
-from app.config.env import ENV_VOICE_KEY, env_value
+from app.config.env import (
+    ENV_EDGE_PITCH_KEY, ENV_EDGE_RATE_KEY, ENV_EDGE_VOICE_KEY,
+    ENV_VOICE_KEY, ENV_VOICE_LENGTH_KEY, ENV_VOICE_NOISE_KEY,
+    ENV_VOICE_NOISE_W_KEY, ENV_VOICE_SPEAKER_KEY, ENV_VOICE_VOLUME_KEY,
+    env_float, env_int, env_value,
+)
 
 SPEECH_STRIP_MARKDOWN_PATTERN: str = r"[\*#_`~]"
 SPEECH_STRIP_EMOJI_PATTERN: str = r"[\U00010000-\U0010ffff]"
@@ -28,64 +33,28 @@ TTS_VOICES_DIR: str = "voices"
 TTS_VOICE_MODEL_EXTENSION: str = ".onnx"
 TTS_VOICE_CONFIG_SUFFIX: str = ".json"
 
-TTS_VOICE_DEFAULT_ID: str = "alan"
-TTS_VOICE_ID: str = env_value(ENV_VOICE_KEY, TTS_VOICE_DEFAULT_ID)
-TTS_VOICE_FALLBACK_ID: str = TTS_VOICE_DEFAULT_ID
-
-TTS_VOICE_ALIASES: dict[str, str] = {
-    "alan": "en_GB-alan-medium",
-    "barkeep": "en_GB-northern_english_male-medium",
-    "hfc": "en_US-hfc_male-medium",
-    "joe": "en_US-joe-medium",
-    "norman": "en_US-norman-medium",
-    "ryan_high": "en_US-ryan-high",
-    "vctk": "en_GB-vctk-medium",
-}
-
-TTS_VOICE_TUNING: dict[str, dict] = {
-    "en_GB-northern_english_male-medium": {
-        "length_multiplier": 1.06,
-        "noise_w_multiplier": 1.06,
-    },
-    "en_US-joe-medium": {
-        "length_multiplier": 1.05,
-    },
-    "en_US-norman-medium": {
-        "length_multiplier": 1.08,
-        "noise_w_multiplier": 1.06,
-    },
-    "en_US-ryan-high": {
-        "length_multiplier": 1.04,
-    },
-    "en_US-hfc_male-medium": {
-        "length_multiplier": 1.05,
-    },
-    "en_GB-vctk-medium": {
-        "speaker": 0,
-    },
-}
-
-TTS_VOICE_DEFAULT_LENGTH_MULTIPLIER: float = 1.0
-TTS_VOICE_DEFAULT_NOISE_MULTIPLIER: float = 1.0
-TTS_VOICE_DEFAULT_NOISE_W_MULTIPLIER: float = 1.0
+TTS_VOICE_NEUTRAL_MULTIPLIER: float = 1.0
 TTS_VOICE_DEFAULT_VOLUME: float = 1.0
 
-TTS_EDGE_VOICES: dict[str, dict] = {
-    "connor": {
-        "voice": "en-IE-ConnorNeural",
-        "rate": "-6%",
-        "pitch": "-3Hz",
-    },
-    "ryan": {
-        "voice": "en-GB-RyanNeural",
-        "rate": "-4%",
-        "pitch": "-2Hz",
-    },
-}
+TTS_VOICE_DEFAULT_ID: str = "alan"
+TTS_VOICE_DEFAULT_MODEL: str = "en_GB-alan-medium"
 
-TTS_EDGE_DEFAULT_VOICE: str = "en-GB-RyanNeural"
-TTS_EDGE_DEFAULT_RATE: str = "-4%"
-TTS_EDGE_DEFAULT_PITCH: str = "-2Hz"
+TTS_VOICE_ID: str = env_value(ENV_VOICE_KEY, TTS_VOICE_DEFAULT_ID)
+TTS_VOICE_LENGTH_MULTIPLIER: float = env_float(
+    ENV_VOICE_LENGTH_KEY, TTS_VOICE_NEUTRAL_MULTIPLIER
+)
+TTS_VOICE_NOISE_MULTIPLIER: float = env_float(
+    ENV_VOICE_NOISE_KEY, TTS_VOICE_NEUTRAL_MULTIPLIER
+)
+TTS_VOICE_NOISE_W_MULTIPLIER: float = env_float(
+    ENV_VOICE_NOISE_W_KEY, TTS_VOICE_NEUTRAL_MULTIPLIER
+)
+TTS_VOICE_VOLUME: float = env_float(ENV_VOICE_VOLUME_KEY, TTS_VOICE_DEFAULT_VOLUME)
+TTS_VOICE_SPEAKER: int | None = env_int(ENV_VOICE_SPEAKER_KEY)
+
+TTS_EDGE_VOICE: str = env_value(ENV_EDGE_VOICE_KEY, "en-GB-RyanNeural")
+TTS_EDGE_RATE: str = env_value(ENV_EDGE_RATE_KEY, "-4%")
+TTS_EDGE_PITCH: str = env_value(ENV_EDGE_PITCH_KEY, "-2Hz")
 
 TTS_PIPER_FALLBACK_SAMPLE_RATE: int = 22050
 TTS_PIPER_DEFAULT_LENGTH_SCALE: float = 1.0
