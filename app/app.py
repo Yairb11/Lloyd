@@ -3,6 +3,7 @@ import sys
 import traceback
 from PyQt6.QtWidgets import QApplication
 
+from app.audio.voices import load_catalog
 from app.config import APP_NAME, ORG_NAME
 from app.core import qthread_support
 from app.widgets.main_window import MainWindow
@@ -28,6 +29,8 @@ def run() -> None:
     global _window
     qthread_support.install_diagnostics()
     sys.excepthook = _crash_excepthook
+
+    load_catalog()
 
     app = QApplication(sys.argv)
     app.setStyle("Fusion")

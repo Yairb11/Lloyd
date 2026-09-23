@@ -21,4 +21,5 @@ dependencies = [
     "thefuzz>=0.22.1",
     "vosk>=0.3.45",
     "faster-whisper>=1.0.0",
+    "python-dotenv>=1.0.0",
 ]

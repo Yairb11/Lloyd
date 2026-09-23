@@ -3,13 +3,16 @@ __pycache__/
 
 .venv/
 .env
-models/
 
 test/
 test.py
-media/
-output/
-input_scans/
-*.pt
+test_*.py
 
 runtime/
+output/
+models/
+input_scans/
+media/
+*.pt
+voices/*.onnx
+voices/*.onnx.json

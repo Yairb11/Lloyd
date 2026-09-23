@@ -15,6 +15,9 @@ from app.core.text import split_into_sentences
 _TURN_END = object()
 _THREAD_END = object()
 
+class _VoiceChange:
+    def __init__(self, voice_id: str) -> None:
+        self.voice_id = voice_id
 
 class LloydSpeaker(QThread):
     speech_started = pyqtSignal()
@@ -60,6 +63,9 @@ class LloydSpeaker(QThread):
             generation, payload = await self._queue.get()
             if payload is _THREAD_END:
                 break
+            if isinstance(payload, _VoiceChange):
+                await self._change_voice(payload.voice_id)
+                continue
             if generation != self._generation:
                 continue
             if payload is _TURN_END:
@@ -110,6 +116,14 @@ class LloydSpeaker(QThread):
             sentence, lambda: generation != self._generation
         )
 
+    async def _change_voice(self, voice_id: str) -> None:
+        self._player.stop()
+        self._speaking = False
+        self._sample_rate = None
+        self._engine = create_engine(voice_id)
+        await self._engine.warmup()
+        self.engine_ready.emit(self._engine.name)
+
     def enqueue(self, sentence: str) -> None:
         if sentence.strip():
             self._put(sentence)
@@ -129,6 +143,10 @@ class LloydSpeaker(QThread):
         if self._speaking:
             self._speaking = False
             self.speech_finished.emit()
+            
+    def set_voice(self, voice_id: str) -> None:
+        self.stop()
+        self._put(_VoiceChange(voice_id))
 
     def shutdown(self) -> None:
         self.stop()
