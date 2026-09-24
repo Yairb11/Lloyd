@@ -1,106 +1,176 @@
-# Lloyd's voices
+# How To Add Voices
 
-Every voice Lloyd can speak with lives in this folder. `en_GB-alan-medium` is the one the
-application ships with: it is the default and the fallback whenever anything else is
-unavailable. Every other voice is a per-machine choice made in `.env` — nothing about it is
-written into the application's code or config.
+Lloyd speaks with [Piper](https://github.com/rhasspy/piper) neural voices, which run entirely
+on your machine. `en_GB-alan-medium` is installed by `install.py` and is the default. You can
+add any other Piper voice and switch to it in `.env`.
 
-Model files are gitignored. A voice is always a **pair**, and both files are required:
+## 1. What to download, and from where
 
-    en_US-hfc_male-medium.onnx
-    en_US-hfc_male-medium.onnx.json
+All Piper voices are hosted on Hugging Face:
 
-The names must match, because Piper finds the config by appending `.json` to the model path.
+**https://huggingface.co/rhasspy/piper-voices/tree/main/en**
 
-## 1. Download a voice
+A voice is always a **pair of files**, and you need both:
 
-Browse every English voice: https://huggingface.co/rhasspy/piper-voices/tree/main/en
+| File | Purpose |
+|---|---|
+| `<voice>.onnx` | The voice model (about 60 to 115 MB) |
+| `<voice>.onnx.json` | Its configuration: sample rate, speakers, default pacing |
 
-Download both files of a pair into this folder. These are good bartender candidates:
+Keep the two file names identical apart from the extra `.json`. Lloyd finds the config by
+appending `.json` to the model path.
 
-| Voice | Size | Character | Links |
+### Recommended voices
+
+| Voice | Size | Character | Download |
 |---|---|---|---|
-| `en_GB-northern_english_male-medium` | 60 MB | Northern English pub-landlord warmth. The pick. | [.onnx](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx) · [.onnx.json](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx.json) |
-| `en_US-joe-medium` | 60 MB | Deep, calm American male. | [.onnx](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/joe/medium/en_US-joe-medium.onnx) · [.onnx.json](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/joe/medium/en_US-joe-medium.onnx.json) |
-| `en_US-norman-medium` | 61 MB | Older and grainier, lots of character. | [.onnx](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/norman/medium/en_US-norman-medium.onnx) · [.onnx.json](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/norman/medium/en_US-norman-medium.onnx.json) |
-| `en_US-ryan-high` | 115 MB | Cleaner `high` quality, friendly mid-range. | [.onnx](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx) · [.onnx.json](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx.json) |
-| `en_US-hfc_male-medium` | 60 MB | Neutral and warm, very clean. | [.onnx](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/hfc_male/medium/en_US-hfc_male-medium.onnx) · [.onnx.json](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/hfc_male/medium/en_US-hfc_male-medium.onnx.json) |
-| `en_GB-vctk-medium` | 73 MB | Multi-speaker, 109 voices in one file. | [.onnx](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/vctk/medium/en_GB-vctk-medium.onnx) · [.onnx.json](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/vctk/medium/en_GB-vctk-medium.onnx.json) |
-| `en_GB-alan-medium` | 60 MB | Ships with the app. Crisp RP, reads as butler. | [.onnx](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/medium/en_GB-alan-medium.onnx) · [.onnx.json](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/medium/en_GB-alan-medium.onnx.json) |
+| `en_GB-alan-medium` | 60 MB | Crisp British, butler-like. **Default** | [.onnx](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/medium/en_GB-alan-medium.onnx) · [.onnx.json](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/medium/en_GB-alan-medium.onnx.json) |
+| `en_GB-northern_english_male-medium` | 60 MB | Warm Northern English pub landlord | [.onnx](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx) · [.onnx.json](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx.json) |
+| `en_US-joe-medium` | 60 MB | Deep, calm American | [.onnx](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/joe/medium/en_US-joe-medium.onnx) · [.onnx.json](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/joe/medium/en_US-joe-medium.onnx.json) |
+| `en_US-norman-medium` | 61 MB | Older and grainier, lots of character | [.onnx](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/norman/medium/en_US-norman-medium.onnx) · [.onnx.json](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/norman/medium/en_US-norman-medium.onnx.json) |
+| `en_US-hfc_male-medium` | 60 MB | Neutral and warm, very clean | [.onnx](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/hfc_male/medium/en_US-hfc_male-medium.onnx) · [.onnx.json](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/hfc_male/medium/en_US-hfc_male-medium.onnx.json) |
+| `en_US-ryan-high` | 115 MB | Friendly, higher-quality model | [.onnx](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx) · [.onnx.json](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx.json) |
+| `en_GB-vctk-medium` | 73 MB | 109 speakers in one model | [.onnx](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/vctk/medium/en_GB-vctk-medium.onnx) · [.onnx.json](https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/vctk/medium/en_GB-vctk-medium.onnx.json) |
 
-For any other voice, the URL pattern is:
+### Any other voice
 
-    .../resolve/main/{family}/{lang}/{name}/{quality}/{lang}-{name}-{quality}.onnx
+Direct download links follow this pattern:
 
-so `en_US-joe-medium` becomes `.../main/en/en_US/joe/medium/en_US-joe-medium.onnx`.
+```text
+https://huggingface.co/rhasspy/piper-voices/resolve/main/en/{lang}/{name}/{quality}/{lang}-{name}-{quality}.onnx
+```
 
-Piper can also fetch them for you, and lists every voice it knows when given no arguments:
+For example, `en_US-joe-medium` has `lang` = `en_US`, `name` = `joe`, and `quality` = `medium`.
+Add `.json` to the end of the URL for the config file.
 
-    uv run python -m piper.download_voices en_US-joe-medium --download-dir voices
-    uv run python -m piper.download_voices
+Piper can also download voices for you. Run this from the project root:
 
-## 2. Point `.env` at it
+```powershell
+uv run python -m piper.download_voices en_US-joe-medium --download-dir voices
+```
 
-`.env` sits in the project root and is gitignored, so your choice stays on your machine.
-Set `LLOYD_VOICE` to the **filename stem** — the name without `.onnx`:
+Run it with no voice name to list every available voice.
 
-    LLOYD_VOICE=en_US-joe-medium
+## 2. Where to put them
 
-That is the only required line. Restart Lloyd and it will speak with that voice.
+Place both files directly in the `voices/` folder at the project root. Subfolders are not
+scanned.
 
-On startup Lloyd scans this folder and logs what it found, so you can check the name:
+```text
+lloyd/
+└── voices/
+    ├── en_GB-alan-medium.onnx
+    ├── en_GB-alan-medium.onnx.json
+    ├── en_US-joe-medium.onnx            <- new voice
+    └── en_US-joe-medium.onnx.json       <- and its config
+```
 
-    [Lloyd voice]: 7 voice(s) in voices: alan, en_GB-northern_english_male-medium, ...
-    [Lloyd voice]: speaking with en_US-joe-medium [piper: en_US-joe-medium.onnx, 22050 Hz, pace 1.05]
+Voice files are gitignored, so each machine keeps its own set.
 
-With no `.env`, an empty value, or a name that is not there, Lloyd uses `alan`.
+## 3. Point `.env` at the voice
 
-## 3. Adjust the timing
+`.env` is in the project root. If you don't have one yet, copy the template:
 
-A bartender talking you through a build is unhurried, so most voices want slowing down a
-little:
+```powershell
+Copy-Item .env.example .env
+```
 
-    LLOYD_VOICE=en_US-joe-medium
-    LLOYD_VOICE_LENGTH=1.05
+Set `LLOYD_VOICE` to the voice's file name **without** `.onnx`:
 
-`1.04`-`1.08` suits a bartender. Above about `1.15` it starts to sound drugged.
+```dotenv
+LLOYD_VOICE=en_US-joe-medium
+```
 
-### All keys
+That is the only line you need. Restart Lloyd, because `.env` is read once at startup.
+
+If the value is empty, or no voice with that name is in `voices/`, Lloyd falls back to `alan`
+(the default voice). If no Piper voice loads at all, it falls back to Microsoft Edge's online
+voice.
+
+### Optional tuning
 
 | Key | Default | Meaning |
 |---|---|---|
-| `LLOYD_VOICE`         | `alan`             | `alan`, a filename stem from this folder, or `edge` |
-| `LLOYD_VOICE_LENGTH`  | `1.0`              | Pace. `1.05` is 5% slower than the model's natural pace |
-| `LLOYD_VOICE_NOISE`   | `1.0`              | Generator noise |
-| `LLOYD_VOICE_NOISE_W` | `1.0`              | Phoneme-width jitter; above 1.0 sounds less robotic |
-| `LLOYD_VOICE_VOLUME`  | `1.0`              | Output gain. Absolute, not a multiplier |
-| `LLOYD_VOICE_SPEAKER` | unset              | Speaker index, multi-speaker models only |
-| `LLOYD_EDGE_VOICE`    | `en-GB-RyanNeural` | Cloud voice, used when Piper cannot load |
-| `LLOYD_EDGE_RATE`     | `-4%`              | |
-| `LLOYD_EDGE_PITCH`    | `-2Hz`             | |
+| `LLOYD_VOICE` | `alan` | `alan`, a file name from `voices/` without `.onnx`, or `edge` |
+| `LLOYD_VOICE_LENGTH` | `1.0` | Pace. `1.05` is 5% slower. `1.04` to `1.08` suits a bartender |
+| `LLOYD_VOICE_NOISE` | `1.0` | Voice variation |
+| `LLOYD_VOICE_NOISE_W` | `1.0` | Timing variation. Above `1.0` sounds less robotic |
+| `LLOYD_VOICE_VOLUME` | `1.0` | Output gain |
+| `LLOYD_VOICE_SPEAKER` | empty | Speaker number, for multi-speaker models only |
+| `LLOYD_EDGE_VOICE` | `en-GB-RyanNeural` | Online fallback voice |
+| `LLOYD_EDGE_RATE` | `-4%` | Online fallback speaking rate |
+| `LLOYD_EDGE_PITCH` | `-2Hz` | Online fallback pitch |
 
-The four timing keys are **multipliers of the model's own values**, read from its
-`.onnx.json` at startup. That matters because natives differ a lot —
-`en_US-hfc_male-medium` ships at `length_scale 0.8` and `en_GB-vctk-medium` at `1.4` — so an
-absolute number that suits one model ruins another. `1.0` always means "leave this model
-alone". They apply only to the voice you selected.
+`LENGTH`, `NOISE`, and `NOISE_W` **multiply** the model's own values from its `.onnx.json`, so
+`1.0` always means "as the model was trained". Models differ a lot, so start at `1.0` and adjust
+in small steps. These values apply only to the selected voice.
 
-A multi-speaker model needs a speaker index:
+For a multi-speaker model, pick a speaker. An out-of-range number falls back to speaker `0`.
 
-    LLOYD_VOICE=en_GB-vctk-medium
-    LLOYD_VOICE_SPEAKER=42
+```dotenv
+LLOYD_VOICE=en_GB-vctk-medium
+LLOYD_VOICE_SPEAKER=42
+```
 
-Out-of-range values are reported and fall back to speaker 0.
+To try a voice without editing `.env`, set it for one run from the shell:
 
-A real shell variable overrides `.env`, which is handy for trying one without editing the
-file:
+```powershell
+$env:LLOYD_VOICE = "en_US-norman-medium"; uv run run.py
+```
 
-    $env:LLOYD_VOICE = "en_US-norman-medium"; uv run python run.py
+## 4. Full example: switching to `en_US-joe-medium`
 
-Restart Lloyd after editing `.env` — it is read once at import.
+**Step 1: Download both files into `voices/`.** From the project root in PowerShell:
 
-## Auditioning
+```powershell
+$base = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/joe/medium"
+Invoke-WebRequest -Uri "$base/en_US-joe-medium.onnx"      -OutFile "voices\en_US-joe-medium.onnx"
+Invoke-WebRequest -Uri "$base/en_US-joe-medium.onnx.json" -OutFile "voices\en_US-joe-medium.onnx.json"
+```
 
-Download two or three candidates, then try each by changing `LLOYD_VOICE` and restarting.
-Picking by description is a waste of time — they sound quite different from what the name
-suggests.
+**Step 2: Check that both files arrived.**
+
+```powershell
+Get-ChildItem voices
+```
+
+```text
+en_GB-alan-medium.onnx
+en_GB-alan-medium.onnx.json
+en_US-joe-medium.onnx
+en_US-joe-medium.onnx.json
+```
+
+**Step 3: Edit `.env`.** Select the voice and slow it down slightly:
+
+```dotenv
+LLOYD_VOICE=en_US-joe-medium
+LLOYD_VOICE_LENGTH=1.05
+LLOYD_VOICE_NOISE=1.0
+LLOYD_VOICE_NOISE_W=1.0
+LLOYD_VOICE_VOLUME=1.0
+LLOYD_VOICE_SPEAKER=
+LLOYD_EDGE_VOICE=en-GB-RyanNeural
+LLOYD_EDGE_RATE=-4%
+LLOYD_EDGE_PITCH=-2Hz
+```
+
+**Step 4: Restart Lloyd and check the log.**
+
+```powershell
+uv run run.py
+```
+
+The console (or `runtime/lloyd.log` when started from the desktop launcher) shows:
+
+```text
+[Lloyd voice]: 2 voice(s) in voices: alan, en_US-joe-medium
+[Lloyd voice]: speaking with en_US-joe-medium [piper: en_US-joe-medium.onnx, 22050 Hz, pace 1.05]
+```
+
+If you see `voice 'en_US-joe-medium' is not available, using 'alan' instead`, check the
+spelling in `.env` against the file name. If you see `missing its config file`, the
+`.onnx.json` file is missing or misnamed.
+
+**Tip:** Download two or three candidates and compare them by switching `LLOYD_VOICE` and
+restarting. Voices rarely sound the way their names suggest.

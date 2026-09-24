@@ -9,7 +9,6 @@ import winreg
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
-
 from huggingface_hub import snapshot_download
 
 from app.config.install import (
