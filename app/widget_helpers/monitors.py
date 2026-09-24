@@ -38,10 +38,6 @@ def get_screens() -> list[Monitor]:
     return [_to_monitor(screen, primary) for screen in QGuiApplication.screens()]
 
 
-def screen_count() -> int:
-    return len(QGuiApplication.screens())
-
-
 def layout_signature(screens: list[Monitor]) -> str:
     return "".join(
         MONITOR_ORIENTATION_LANDSCAPE if monitor.width >= monitor.height else MONITOR_ORIENTATION_PORTRAIT
@@ -75,19 +71,6 @@ def find_screen(screens: list[Monitor], name: str, geometry: QRect | None) -> Mo
             if monitor.geometry == geometry:
                 return monitor
     return named[0] if named else None
-
-
-def bounding_box(screens: list[Monitor]) -> tuple[int, int, int, int]:
-    min_x = min(monitor.x for monitor in screens)
-    min_y = min(monitor.y for monitor in screens)
-    max_x = max(monitor.x + monitor.width for monitor in screens)
-    max_y = max(monitor.y + monitor.height for monitor in screens)
-    return min_x, min_y, max_x, max_y
-
-
-def total_size(screens: list[Monitor]) -> tuple[int, int]:
-    min_x, min_y, max_x, max_y = bounding_box(screens)
-    return max_x - min_x, max_y - min_y
 
 
 def centered_rect(monitor: Monitor) -> QRect:

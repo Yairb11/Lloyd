@@ -2,6 +2,7 @@ import asyncio
 import itertools
 import re
 import threading
+from pathlib import Path
 from claude_agent_sdk import AssistantMessage, ClaudeSDKClient, ResultMessage, TextBlock
 from claude_agent_sdk.types import StreamEvent
 from PyQt6.QtCore import QThread, pyqtSignal
@@ -33,7 +34,6 @@ def split_completed_sentences(buffer: str) -> tuple[list[str], str]:
 
 
 class Agent(QThread):
-    agent_ready = pyqtSignal()
     thinking_started = pyqtSignal()
     thinking_ended = pyqtSignal()
     speak_sentence = pyqtSignal(str)
@@ -68,12 +68,6 @@ class Agent(QThread):
         self._active_scan_path: str | None = None
 
         self._popup_requested.connect(self._create_scan_popup)
-
-    def is_ready(self) -> bool:
-        return self._ready.is_set() and self._client is not None
-
-    def is_offline(self) -> bool:
-        return self._offline
 
     def run(self) -> None:
         self._loop = asyncio.new_event_loop()
@@ -110,7 +104,6 @@ class Agent(QThread):
 
         self._offline = False
         perf.mark("agent.client_ready")
-        self.agent_ready.emit()
         return True
 
     async def _open_client(self) -> None:
@@ -134,11 +127,8 @@ class Agent(QThread):
             self._deliver_speech(AGENT_NOT_READY_SPEECH)
             return
 
-        if self._client is None:
-            asyncio.run_coroutine_threadsafe(self._recover_then_run(message), loop)
-            return
-
-        asyncio.run_coroutine_threadsafe(self._run_turn(message), loop)
+        self._interrupted.clear()
+        asyncio.run_coroutine_threadsafe(self._process_message(message), loop)
 
     def _deliver_speech(self, text: str) -> None:
         self.show_reply.emit(text)
@@ -146,19 +136,39 @@ class Agent(QThread):
         self.speech_complete.emit()
         self.thinking_ended.emit()
 
-    async def _recover_then_run(self, message: str) -> None:
+    def _announce_offline(self) -> None:
+        self.offline_detected.emit(pick_offline_line())
+        self.thinking_ended.emit()
+
+    async def _process_message(self, message: str) -> None:
+        online = await asyncio.to_thread(is_online, use_cache=False)
+        if self._interrupted.is_set():
+            return
+
+        self._offline = not online
+        if self._offline:
+            self._announce_offline()
+            return
+
+        if self._client is None and not await self._reconnect():
+            return
+
+        await self._run_turn(message)
+
+    async def _reconnect(self) -> bool:
         async with self._turn_lock:
+            if self._client is not None:
+                return True
             connected = await self._connect_or_deflect(announce_offline=False)
 
         if connected:
-            await self._run_turn(message)
-            return
+            return True
 
         if self._offline:
-            self.offline_detected.emit(pick_offline_line())
-            self.thinking_ended.emit()
+            self._announce_offline()
         else:
             self._deliver_speech(AGENT_ERROR_SPEECH)
+        return False
 
     def reset_session(self) -> None:
         loop = self._loop
@@ -173,7 +183,8 @@ class Agent(QThread):
 
     async def _run_turn(self, message: str) -> None:
         async with self._turn_lock:
-            self._interrupted.clear()
+            if self._interrupted.is_set():
+                return
 
             perf.mark("agent.query_sent")
             self.thinking_started.emit()
@@ -354,8 +365,6 @@ class Agent(QThread):
         if path is None:
             return
         try:
-            from pathlib import Path
-
             Path(path).unlink(missing_ok=True)
         except OSError as exc:
             print(f"{LOG_PREFIX_ERROR}: could not delete uploaded scan {path}: {exc}")

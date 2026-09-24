@@ -1,4 +1,4 @@
-from PyQt6.QtCore import QPoint, QRect, Qt, pyqtSignal
+from PyQt6.QtCore import QPoint, QRect, Qt
 from PyQt6.QtGui import QCursor
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
@@ -16,8 +16,6 @@ from app.config import (
 
 
 class FloatingPanel(QFrame):
-    panel_closed = pyqtSignal()
-
     def __init__(
         self,
         parent=None,
@@ -131,7 +129,6 @@ class FloatingPanel(QFrame):
     def close_panel(self) -> None:
         self._resizing = False
         self.hide()
-        self.panel_closed.emit()
 
     def _get_resize_edges(self, pos: QPoint) -> dict:
         rect = self.rect()

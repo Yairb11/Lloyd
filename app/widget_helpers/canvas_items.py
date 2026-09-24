@@ -47,10 +47,6 @@ class ShapeItem(QGraphicsObject):
         painter.setPen(self._pen)
         painter.drawPath(self._path)
 
-    def set_fill(self, color) -> None:
-        self._brush = QBrush(QColor(color))
-        self.update()
-
 
 class GroupItem(QGraphicsObject):
     def __init__(self, parent=None):

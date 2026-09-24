@@ -60,9 +60,6 @@ class VoiceCatalog:
     def get(self, voice_id: str) -> VoiceSpec | None:
         return self.voices.get(voice_id)
 
-    def ids(self) -> list[str]:
-        return sorted({spec.voice_id for spec in self.voices.values()})
-
     def piper_ids(self) -> list[str]:
         return sorted(
             {
@@ -120,10 +117,6 @@ def load_catalog(refresh: bool = False) -> VoiceCatalog:
         _catalog = build_catalog()
         print(f"{LOG_PREFIX_VOICE}: {_catalog.summary()}")
     return _catalog
-
-
-def available_voice_ids() -> list[str]:
-    return load_catalog().ids()
 
 
 def resolve_voice(voice_id: str | None = None) -> VoiceSpec:

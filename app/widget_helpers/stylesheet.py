@@ -4,18 +4,23 @@ from app.config import (
     COLOR_BUBBLE_TEXT, COLOR_BUBBLE_USER_BG, COLOR_CANVAS_BG,
     COLOR_INPUT_BG, COLOR_MIC_ACTIVE, COLOR_PANEL_BG,
     COLOR_SCROLLBAR_HANDLE, COLOR_SCROLLBAR_HANDLE_HOVER, COLOR_SCROLLBAR_TRACK,
-    COLOR_STOP_ACTIVE, COLOR_TEXT_PRIMARY, FONT_FAMILY,
-    FONT_SIZE_NORMAL, MUTE_BUTTON_RADIUS, OBJECT_NAME_AGENT_BUBBLE,
-    OBJECT_NAME_CANVAS_PANEL, OBJECT_NAME_CHAT_HISTORY, OBJECT_NAME_CHAT_PANEL,
-    OBJECT_NAME_MIC_TOGGLE_BUTTON, OBJECT_NAME_MUTE_BUTTON, OBJECT_NAME_SEND_BUTTON,
-    OBJECT_NAME_USER_BUBBLE, SCROLLBAR_HANDLE_MIN_HEIGHT, SCROLLBAR_HANDLE_RADIUS,
+    COLOR_STOP_ACTIVE, COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY,
+    FONT_FAMILY, FONT_SIZE_NORMAL, MUTE_BUTTON_RADIUS,
+    OBJECT_NAME_AGENT_BUBBLE, OBJECT_NAME_CANVAS_PANEL, OBJECT_NAME_CHAT_HISTORY,
+    OBJECT_NAME_CHAT_PANEL, OBJECT_NAME_MIC_TOGGLE_BUTTON, OBJECT_NAME_MUTE_BUTTON,
+    OBJECT_NAME_SEND_BUTTON, OBJECT_NAME_USER_BUBBLE, OBJECT_NAME_VOLUME_POPUP,
+    OBJECT_NAME_VOLUME_SLIDER, SCROLLBAR_HANDLE_MIN_HEIGHT, SCROLLBAR_HANDLE_RADIUS,
     SCROLLBAR_WIDTH, STYLE_BORDER_WIDTH, STYLE_BUTTON_BORDER_RADIUS,
     STYLE_BUTTON_PADDING_H, STYLE_BUTTON_PADDING_V, STYLE_INPUT_BORDER_RADIUS,
-    STYLE_INPUT_PADDING,
+    STYLE_INPUT_PADDING, VOLUME_LABEL_FONT_SIZE, VOLUME_POPUP_RADIUS,
+    VOLUME_SLIDER_GROOVE_WIDTH, VOLUME_SLIDER_HANDLE_SIZE,
 )
 
 
 def build_stylesheet() -> str:
+    groove_radius = VOLUME_SLIDER_GROOVE_WIDTH // 2
+    handle_overhang = (VOLUME_SLIDER_HANDLE_SIZE - VOLUME_SLIDER_GROOVE_WIDTH) // 2
+    handle_radius = VOLUME_SLIDER_HANDLE_SIZE // 2
     return f"""
     QWidget {{
         background-color: {COLOR_BG};
@@ -126,5 +131,40 @@ def build_stylesheet() -> str:
     QPushButton#{OBJECT_NAME_MUTE_BUTTON}:checked {{
         background-color: {COLOR_INPUT_BG};
         border: {STYLE_BORDER_WIDTH}px solid {COLOR_MIC_ACTIVE};
+    }}
+    QFrame#{OBJECT_NAME_VOLUME_POPUP} {{
+        background-color: {COLOR_INPUT_BG};
+        border: {STYLE_BORDER_WIDTH}px solid {COLOR_BORDER};
+        border-radius: {VOLUME_POPUP_RADIUS}px;
+    }}
+    QFrame#{OBJECT_NAME_VOLUME_POPUP} QLabel {{
+        background-color: transparent;
+        color: {COLOR_TEXT_SECONDARY};
+        font-size: {VOLUME_LABEL_FONT_SIZE}pt;
+    }}
+    QSlider#{OBJECT_NAME_VOLUME_SLIDER} {{
+        background-color: transparent;
+    }}
+    QSlider#{OBJECT_NAME_VOLUME_SLIDER}::groove:vertical {{
+        background: {COLOR_BORDER};
+        width: {VOLUME_SLIDER_GROOVE_WIDTH}px;
+        border-radius: {groove_radius}px;
+    }}
+    QSlider#{OBJECT_NAME_VOLUME_SLIDER}::sub-page:vertical {{
+        background: {COLOR_BORDER};
+        border-radius: {groove_radius}px;
+    }}
+    QSlider#{OBJECT_NAME_VOLUME_SLIDER}::add-page:vertical {{
+        background: {COLOR_ACCENT};
+        border-radius: {groove_radius}px;
+    }}
+    QSlider#{OBJECT_NAME_VOLUME_SLIDER}::handle:vertical {{
+        background: {COLOR_TEXT_PRIMARY};
+        height: {VOLUME_SLIDER_HANDLE_SIZE}px;
+        margin: 0px -{handle_overhang}px;
+        border-radius: {handle_radius}px;
+    }}
+    QSlider#{OBJECT_NAME_VOLUME_SLIDER}::handle:vertical:hover {{
+        background: {COLOR_ACCENT};
     }}
     """

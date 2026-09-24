@@ -5,14 +5,14 @@ from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QSplitter, QWidget
 
 from app.config import (
     APP_NAME, CANVAS_POPUP_DEFAULT_HEIGHT, CANVAS_POPUP_DEFAULT_WIDTH,
-    FULLSCREEN_SHORTCUT_ESC, FULLSCREEN_SHORTCUT_F11, LOG_PREFIX_VOICE,
-    MIC_BUTTON_LISTENING_TEXT, MIC_BUTTON_MUTED_TEXT, ORG_NAME,
-    RECIPE_POPUP_DEFAULT_HEIGHT, RECIPE_POPUP_DEFAULT_WIDTH, HUD_POSITION_OFFSET ,
-    SETTINGS_SPLITTER_STATE_KEY, SPLITTER_DEFAULT_CANVAS_RATIO, SPLITTER_DEFAULT_CHAT_RATIO,
-    SPLITTER_HANDLE_WIDTH, SPLITTER_STRETCH_CANVAS, SPLITTER_STRETCH_CHAT,
-    VIDEO_PREVIEW_DEFAULT_HEIGHT, VIDEO_PREVIEW_DEFAULT_WIDTH,
-    VOICE_MSG_NO_COMMAND_HEARD, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH,
-    WINDOW_TITLE,
+    FULLSCREEN_SHORTCUT_ESC, FULLSCREEN_SHORTCUT_F11, HUD_POSITION_OFFSET,
+    LOG_PREFIX_VOICE, MIC_BUTTON_LISTENING_TEXT, MIC_BUTTON_MUTED_TEXT,
+    ORG_NAME, RECIPE_POPUP_DEFAULT_HEIGHT, RECIPE_POPUP_DEFAULT_WIDTH,
+    SETTINGS_SPLITTER_STATE_KEY, SETTINGS_VOLUME_KEY, SPLITTER_DEFAULT_CANVAS_RATIO,
+    SPLITTER_DEFAULT_CHAT_RATIO, SPLITTER_HANDLE_WIDTH, SPLITTER_STRETCH_CANVAS,
+    SPLITTER_STRETCH_CHAT, TTS_VOLUME_PERCENT_DEFAULT, VIDEO_PREVIEW_DEFAULT_HEIGHT,
+    VIDEO_PREVIEW_DEFAULT_WIDTH, VOICE_MSG_NO_COMMAND_HEARD, WINDOW_MIN_HEIGHT,
+    WINDOW_MIN_WIDTH, WINDOW_TITLE,
 )
 from app.core import perf, qthread_support
 from app.threads import VoiceListener
@@ -84,6 +84,8 @@ class MainWindow(QMainWindow):
         self._setup_voice_listener()
 
         self.canvas_panel.mute_button.toggled.connect(self._on_mute_toggle)
+        self.canvas_panel.volume_changed.connect(self.chat_panel.set_speech_volume)
+        self._restore_volume()
 
         self.video_preview = TopLeftVideoWidget(self, width=VIDEO_PREVIEW_DEFAULT_WIDTH, height=VIDEO_PREVIEW_DEFAULT_HEIGHT)
         self.video_preview.hide()
@@ -166,6 +168,11 @@ class MainWindow(QMainWindow):
         else:
             width = self.width()
             self.splitter.setSizes([int(width * SPLITTER_DEFAULT_CANVAS_RATIO), int(width * SPLITTER_DEFAULT_CHAT_RATIO)])
+
+    def _restore_volume(self) -> None:
+        settings = QSettings(ORG_NAME, APP_NAME)
+        percent = settings.value(SETTINGS_VOLUME_KEY, TTS_VOLUME_PERCENT_DEFAULT, type=int)
+        self.canvas_panel.set_volume(percent)
 
     def _setup_voice_listener(self) -> None:
         self.voice_listener = VoiceListener(self)
@@ -341,6 +348,7 @@ class MainWindow(QMainWindow):
             self._placement.save_now()
         settings = QSettings(ORG_NAME, APP_NAME)
         settings.setValue(SETTINGS_SPLITTER_STATE_KEY, self.splitter.saveState())
+        settings.setValue(SETTINGS_VOLUME_KEY, self.canvas_panel.volume())
 
         self.voice_listener.stop()
         self.cocktail_popup.stop()

@@ -4,6 +4,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 
 from app.audio.playback import AmplitudePlayer, silence_pcm
 from app.audio.tts_engine import create_engine
+from app.audio.volume import percent_to_gain
 from app.config import (
     SHUTDOWN_THREAD_TIMEOUT_MS, TTS_AMPLITUDE_NORMALIZATION_PEAK, TTS_AUDIO_BLOCK_FRAMES,
     TTS_INTER_SENTENCE_SILENCE_MS, TTS_POLL_INTERVAL_MS,
@@ -15,9 +16,6 @@ from app.core.text import split_into_sentences
 _TURN_END = object()
 _THREAD_END = object()
 
-class _VoiceChange:
-    def __init__(self, voice_id: str) -> None:
-        self.voice_id = voice_id
 
 class LloydSpeaker(QThread):
     speech_started = pyqtSignal()
@@ -40,6 +38,8 @@ class LloydSpeaker(QThread):
         self._generation: int = 0
         self._speaking: bool = False
         self._sample_rate: int | None = None
+        self._volume_gain: float = 1.0
+        self._muted: bool = False
 
     def run(self) -> None:
         self._loop = asyncio.new_event_loop()
@@ -63,9 +63,6 @@ class LloydSpeaker(QThread):
             generation, payload = await self._queue.get()
             if payload is _THREAD_END:
                 break
-            if isinstance(payload, _VoiceChange):
-                await self._change_voice(payload.voice_id)
-                continue
             if generation != self._generation:
                 continue
             if payload is _TURN_END:
@@ -116,14 +113,6 @@ class LloydSpeaker(QThread):
             sentence, lambda: generation != self._generation
         )
 
-    async def _change_voice(self, voice_id: str) -> None:
-        self._player.stop()
-        self._speaking = False
-        self._sample_rate = None
-        self._engine = create_engine(voice_id)
-        await self._engine.warmup()
-        self.engine_ready.emit(self._engine.name)
-
     def enqueue(self, sentence: str) -> None:
         if sentence.strip():
             self._put(sentence)
@@ -143,10 +132,14 @@ class LloydSpeaker(QThread):
         if self._speaking:
             self._speaking = False
             self.speech_finished.emit()
-            
-    def set_voice(self, voice_id: str) -> None:
-        self.stop()
-        self._put(_VoiceChange(voice_id))
+
+    def set_volume(self, percent: int) -> None:
+        self._volume_gain = percent_to_gain(percent)
+        self._apply_output_gain()
+
+    def set_muted(self, muted: bool) -> None:
+        self._muted = muted
+        self._apply_output_gain()
 
     def shutdown(self) -> None:
         self.stop()
@@ -155,6 +148,9 @@ class LloydSpeaker(QThread):
         if loop is not None and queue is not None:
             loop.call_soon_threadsafe(queue.put_nowait, (self._generation, _THREAD_END))
         self.wait(SHUTDOWN_THREAD_TIMEOUT_MS)
+
+    def _apply_output_gain(self) -> None:
+        self._player.set_gain(0.0 if self._muted else self._volume_gain)
 
     def _put(self, payload) -> None:
         loop = self._loop

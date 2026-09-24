@@ -4,8 +4,8 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from PyQt6.QtCore import QObject, pyqtSignal
 
-from app.config import PHONE_SCAN_HTML_FILENAME, PHONE_SCAN_UPLOAD_DIR
-from app.core.paths import PROJECT_ROOT
+from app.config import PHONE_SCAN_UPLOAD_DIR
+from app.network.html import SCAN_PHONE
 
 UPLOAD_DIR = Path(PHONE_SCAN_UPLOAD_DIR)
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -38,10 +38,7 @@ class PhoneUploadHandler(BaseHTTPRequestHandler):
         pass
 
     def do_GET(self):
-        html_path = PROJECT_ROOT / PHONE_SCAN_HTML_FILENAME
-        with open(html_path, encoding="utf-8") as f:
-            html_page = f.read()
-        encoded_html = html_page.encode("utf-8")
+        encoded_html = SCAN_PHONE.encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(encoded_html)))

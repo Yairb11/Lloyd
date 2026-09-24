@@ -55,7 +55,6 @@ class ChatPanel(QWidget):
         self._busy = False
         self._speaking = False
         self._voice_transcribing = False
-        self._speech_muted = False
         self._engine_ready = False
         self._pending_offline_line: str | None = None
         self._typing_indicator: TypingIndicator | None = None
@@ -215,9 +214,10 @@ class ChatPanel(QWidget):
             self.on_thinking_ended()
 
     def set_speech_muted(self, muted: bool) -> None:
-        self._speech_muted = muted
-        if muted:
-            self.lloyd_speaker.stop()
+        self.lloyd_speaker.set_muted(muted)
+
+    def set_speech_volume(self, percent: int) -> None:
+        self.lloyd_speaker.set_volume(percent)
 
     def shutdown(self) -> None:
         self.render_controller.shutdown()
@@ -249,10 +249,9 @@ class ChatPanel(QWidget):
         self._pending_offline_line = None
         self._append_bubble(line + OFFLINE_HINT_TEXT if OFFLINE_SHOW_HINT else line, is_user=False)
 
-        if not self._speech_muted:
-            spoken = clean_text_for_speech(line)
-            if spoken:
-                self.lloyd_speaker.speak(spoken)
+        spoken = clean_text_for_speech(line)
+        if spoken:
+            self.lloyd_speaker.speak(spoken)
 
         self._set_busy(False)
 
@@ -291,14 +290,10 @@ class ChatPanel(QWidget):
         self._set_busy(False)
 
     def _on_speak_sentence(self, sentence: str) -> None:
-        if self._speech_muted:
-            return
         perf.mark("tts.requested", once=True)
         self.lloyd_speaker.enqueue(sentence)
 
     def _on_speech_complete(self) -> None:
-        if self._speech_muted:
-            return
         self.lloyd_speaker.finish()
 
     def _on_animation_ready(self, spec: dict) -> None:

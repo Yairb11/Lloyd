@@ -1,6 +1,5 @@
 PHONE_SCAN_PORT: int = 8080
 PHONE_SCAN_UPLOAD_DIR: str = "output"
-PHONE_SCAN_HTML_FILENAME: str = "scan_phone.html"
 PHONE_SCAN_POLL_INTERVAL_S: float = 0.1
 
 PHONE_SCAN_WINDOW_TITLE: str = "Lloyd — Wi-Fi Mobile Transmitter Receiver"

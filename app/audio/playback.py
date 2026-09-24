@@ -4,6 +4,7 @@ import numpy as np
 import sounddevice as sd
 import soundfile as sf
 
+
 def decode_audio_to_pcm(audio_bytes: bytes) -> tuple[np.ndarray, int]:
     data, sample_rate = sf.read(io.BytesIO(audio_bytes), dtype="int16", always_2d=False)
     if data.ndim > 1:
@@ -26,6 +27,7 @@ class AmplitudePlayer:
         self._block_frames = block_frames
         self._amplitude_peak = amplitude_peak
         self._on_amplitude = on_amplitude
+        self._gain: float = 1.0
 
         self._lock = threading.Lock()
         self._buffer: np.ndarray = np.empty(0, dtype=np.int16)
@@ -33,6 +35,9 @@ class AmplitudePlayer:
         self._drained_event = threading.Event()
         self._drained_event.set()
         self._stream: sd.OutputStream | None = None
+
+    def set_gain(self, gain: float) -> None:
+        self._gain = max(0.0, min(1.0, float(gain)))
 
     def start(self, sample_rate: int) -> None:
         self._teardown_stream()
@@ -93,7 +98,7 @@ class AmplitudePlayer:
 
         if take < frames:
             chunk = np.concatenate([chunk, np.zeros(frames - take, dtype=np.int16)])
-        outdata[:, 0] = chunk
+        outdata[:, 0] = self._apply_gain(chunk)
 
         if self._on_amplitude is not None:
             self._on_amplitude(self._compute_amplitude(chunk[:take]))
@@ -101,6 +106,14 @@ class AmplitudePlayer:
         if drained:
             self._drained_event.set()
 
+    def _apply_gain(self, samples: np.ndarray) -> np.ndarray:
+        gain = self._gain
+        if gain >= 1.0:
+            return samples
+        if gain <= 0.0:
+            return np.zeros_like(samples)
+        return np.rint(samples * gain).astype(np.int16)
+    
     def _compute_amplitude(self, samples: np.ndarray) -> float:
         if samples.size == 0:
             return 0.0

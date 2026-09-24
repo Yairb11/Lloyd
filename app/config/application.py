@@ -15,6 +15,7 @@ FULLSCREEN_SHORTCUT_F11: str = "F11"
 FULLSCREEN_SHORTCUT_ESC: str = "Esc"
 
 SETTINGS_SPLITTER_STATE_KEY: str = "window/splitter_state"
+SETTINGS_VOLUME_KEY: str = "audio/volume_percent"
 SETTINGS_WINDOW_GROUP: str = "window"
 SETTINGS_GEOMETRY_LEAF: str = "geometry"
 SETTINGS_WINDOW_STATE_LEAF: str = "state"
