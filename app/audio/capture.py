@@ -21,6 +21,14 @@ def to_float32(audio: bytes) -> np.ndarray:
     return np.frombuffer(audio, dtype=VOICE_AUDIO_DTYPE).astype(np.float32) / 32768.0
 
 
+def normalized_rms(audio: bytes, peak: float) -> float:
+    samples = np.frombuffer(audio, dtype=VOICE_AUDIO_DTYPE)
+    if samples.size == 0:
+        return 0.0
+    rms = float(np.sqrt(np.mean(np.square(samples.astype(np.float64)))))
+    return max(0.0, min(1.0, rms / peak))
+
+
 _PROBE_BYTES: int = (
     chunks_for(VOICE_PREROLL_SPEECH_PROBE_S) * VOICE_BLOCK_SIZE_FRAMES * BYTES_PER_SAMPLE
 )

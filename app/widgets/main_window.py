@@ -176,6 +176,7 @@ class MainWindow(QMainWindow):
         self.voice_listener.error_occurred.connect(self._on_voice_error)
         self.voice_listener.speech_started.connect(self._on_speech_started)
         self.voice_listener.speech_ended.connect(self._on_speech_ended)
+        self.voice_listener.listening_amplitude.connect(self._on_listening_amplitude)
         self.voice_listener.transcribing_started.connect(self._on_transcribing_started)
         self.voice_listener.transcribing_ended.connect(self._on_transcribing_ended)
 
@@ -233,7 +234,7 @@ class MainWindow(QMainWindow):
         elif self._tts_speaking:
             self.canvas_panel.sphere.enter_speaking()
         else:
-            self.canvas_panel.sphere.enter_idle()
+            self.canvas_panel.sphere.enter_default()
 
         if self._agent_busy or self._tts_speaking or self._transcribing:
             self.voice_listener.suspend()
@@ -258,6 +259,9 @@ class MainWindow(QMainWindow):
 
     def _on_speaking_amplitude(self, level: float) -> None:
         self.canvas_panel.sphere.update_speaking_amplitude(level)
+
+    def _on_listening_amplitude(self, level: float) -> None:
+        self.canvas_panel.sphere.update_listening_amplitude(level)
 
     def _on_render_success(self, output_mp4_path: str):
         self._is_rendering = False
