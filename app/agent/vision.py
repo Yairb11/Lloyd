@@ -15,7 +15,7 @@ from app.config import (
 from app.core.paths import PROJECT_ROOT
 
 
-def parse_beverage_list(raw: str) -> list:
+def parse_json_list(raw: str) -> list:
     raw = (raw or "").strip()
     for fence in ("```json", "```"):
         if raw.startswith(fence):
@@ -27,9 +27,7 @@ def parse_beverage_list(raw: str) -> list:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
         return []
-    if isinstance(parsed, list):
-        return [str(item) for item in parsed]
-    return []
+    return parsed if isinstance(parsed, list) else []
 
 
 def _vision_options() -> ClaudeAgentOptions:
@@ -84,4 +82,4 @@ async def analyze_bottle_photo(image_path: str) -> list:
                 if isinstance(message.result, str):
                     final = message.result
 
-    return parse_beverage_list(final or collected)
+    return parse_json_list(final or collected)

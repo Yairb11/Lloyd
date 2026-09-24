@@ -8,7 +8,7 @@ from app.config import (
     SPEECH_OZ_PATTERN, SPEECH_OZ_REPLACEMENT, SPEECH_SENTENCE_SPLIT_PATTERN,
     SPEECH_STRIP_EMOJI_PATTERN, SPEECH_STRIP_MARKDOWN_PATTERN, VOICE_COMMAND_PUNCTUATION_PATTERN,
     VOICE_WAKE_GREETINGS, VOICE_WAKE_GREETING_MATCH_THRESHOLD, VOICE_WAKE_KEYWORD_MATCH_THRESHOLD,
-    VOICE_WAKE_KEYWORD_VARIANTS,
+    VOICE_WAKE_KEYWORD_VARIANTS, CHAT_PARAGRAPH_BREAK_PATTERN, CHAT_PARAGRAPH_SEPARATOR,
 )
 
 
@@ -32,6 +32,13 @@ def clean_text_for_speech(text: str) -> str:
 def split_into_sentences(text: str) -> list[str]:
     sentences = re.split(SPEECH_SENTENCE_SPLIT_PATTERN, text.strip())
     return [sentence.strip() for sentence in sentences if sentence.strip()]
+
+def format_reply_for_display(transcript: str, unspoken_tail: str = "") -> str:
+    spoken = transcript[: len(transcript) - len(unspoken_tail)]
+    paragraphs = re.split(CHAT_PARAGRAPH_BREAK_PATTERN, spoken.strip())
+    return CHAT_PARAGRAPH_SEPARATOR.join(
+        " ".join(paragraph.split()) for paragraph in paragraphs if paragraph.strip()
+    )
 
 
 def sanitize_cocktail_filename(name: str) -> str:

@@ -11,6 +11,9 @@ CHAT_BUBBLE_MAX_WIDTH: int = 220
 CHAT_BUBBLE_RADIUS: int = 14
 CHAT_BUBBLE_PADDING: int = 10
 
+CHAT_PARAGRAPH_BREAK_PATTERN: str = r"\n\s*\n"
+CHAT_PARAGRAPH_SEPARATOR: str = "\n\n"
+
 CHAT_CLEAR_COMMAND_TEXT: str = "/clear"
 CHAT_CLEAR_VOICE_PHRASES: tuple[str, ...] = (
     "clear the chat", "clean the chat", "clear chat", "clean chat",

@@ -10,13 +10,14 @@ from app.agent import client
 from app.agent.vision import analyze_bottle_photo
 from app.config import (
     AGENT_ERROR_SPEECH, AGENT_NOT_READY_SPEECH, AGENT_SCAN_NO_RESULT,
-    LOG_PREFIX_ERROR, SHUTDOWN_THREAD_TIMEOUT_MS, SPEECH_SENTENCE_SPLIT_PATTERN,
+    CHAT_PARAGRAPH_SEPARATOR, LOG_PREFIX_ERROR, SHUTDOWN_THREAD_TIMEOUT_MS,
+    SPEECH_SENTENCE_SPLIT_PATTERN,
 )
 from app.core import perf
 from app.core.connectivity import is_online
 from app.core.offline_lines import pick_offline_line
 from app.core.qthread_support import track
-from app.core.text import clean_text_for_speech
+from app.core.text import clean_text_for_speech, format_reply_for_display
 from app.threads.cancellable_worker import CancellableWorker
 
 _agent_sequence = itertools.count(1)
@@ -178,7 +179,7 @@ class Agent(QThread):
             self.thinking_started.emit()
 
             buffer = ""
-            reply = ""
+            transcript = ""
             saw_delta = False
             spoke = False
             offline_line: str | None = None
@@ -191,7 +192,15 @@ class Agent(QThread):
 
                     if isinstance(item, StreamEvent):
                         event = item.event
-                        if event.get("type") != "content_block_delta":
+                        event_type = event.get("type")
+                        if event_type == "content_block_stop":
+                            tail = buffer.strip()
+                            buffer = ""
+                            transcript += CHAT_PARAGRAPH_SEPARATOR
+                            if tail:
+                                spoke = self._speak(tail, spoke)
+                            continue
+                        if event_type != "content_block_delta":
                             continue
                         delta = event.get("delta") or {}
                         if delta.get("type") != "text_delta":
@@ -199,27 +208,32 @@ class Agent(QThread):
                         if not saw_delta:
                             perf.mark("agent.first_text_delta")
                             saw_delta = True
-                        buffer += delta.get("text", "")
+                        text = delta.get("text", "")
+                        transcript += text
+                        buffer += text
                         completed, buffer = split_completed_sentences(buffer)
                         for sentence in completed:
-                            reply = f"{reply} {sentence}".strip()
                             spoke = self._speak(sentence, spoke)
 
                     elif isinstance(item, AssistantMessage) and not saw_delta:
                         for block in item.content:
                             if not isinstance(block, TextBlock):
                                 continue
+                            transcript += block.text
                             buffer += block.text
                             completed, buffer = split_completed_sentences(buffer)
                             for sentence in completed:
-                                reply = f"{reply} {sentence}".strip()
                                 spoke = self._speak(sentence, spoke)
+                            tail = buffer.strip()
+                            buffer = ""
+                            transcript += CHAT_PARAGRAPH_SEPARATOR
+                            if tail:
+                                spoke = self._speak(tail, spoke)
 
                     elif isinstance(item, ResultMessage):
                         tail = buffer.strip()
                         buffer = ""
                         if tail:
-                            reply = f"{reply} {tail}".strip()
                             spoke = self._speak(tail, spoke)
 
             except Exception as exc:
@@ -227,7 +241,8 @@ class Agent(QThread):
                     if await asyncio.to_thread(is_online):
                         self.error_occurred.emit(str(exc))
                         if not spoke:
-                            reply = AGENT_ERROR_SPEECH
+                            transcript = AGENT_ERROR_SPEECH
+                            buffer = ""
                             spoke = self._speak(AGENT_ERROR_SPEECH, spoke)
                     else:
                         self._offline = True
@@ -235,6 +250,7 @@ class Agent(QThread):
                         offline_line = pick_offline_line()
 
             finally:
+                reply = format_reply_for_display(transcript, buffer)
                 if reply:
                     self.show_reply.emit(reply)
                 if offline_line is not None:
