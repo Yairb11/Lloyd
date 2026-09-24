@@ -13,6 +13,7 @@ from app.config import (
     PANEL_HEADER_HEIGHT, PANEL_HEADER_SPACING, PANEL_RESIZE_SIDE_LEFT,
     PANEL_RESIZE_SIDE_RIGHT, PANEL_TITLE_MAX_LENGTH,
 )
+from app.widget_helpers.scrollbar_style import build_scrollbar_stylesheet
 
 
 class FloatingPanel(QFrame):
@@ -47,7 +48,7 @@ class FloatingPanel(QFrame):
                 border: {PANEL_BORDER_WIDTH}px solid {border_color};
                 border-radius: {PANEL_BORDER_RADIUS}px;
             }}
-        """)
+        """ + build_scrollbar_stylesheet())
 
         self._resizing = False
         self._resize_edges = {"horizontal": False, "bottom": False}
